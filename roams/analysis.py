@@ -26,7 +26,7 @@ def find_transition_point(
     aerial_y,
     sim_x,
     sim_y,
-    smoothing_window=10,
+    smoothing_window=11,
 ) -> np.ndarray:
     """
     Return the emissions rate at which the distribution of observed (and 
@@ -104,7 +104,7 @@ def find_transition_point(
     max_interp_emiss = 1000
     window = np.array([1]*smoothing_window)
 
-    xs = np.arange(1,max_interp_emiss,1)
+    xs = np.arange(5,max_interp_emiss,1)
 
     interp_aerial_dist = np.zeros((len(xs),aerial_x.shape[1]))
     interp_simmed_dist = np.zeros((len(xs),aerial_x.shape[1]))
@@ -125,18 +125,32 @@ def find_transition_point(
             s_x[~np.isnan(s_x)],
             s_y[~np.isnan(s_x)],
         )
-    interp_aerial_dist = np.diff(interp_aerial_dist,axis=0)
-    interp_simmed_dist = np.diff(interp_simmed_dist,axis=0)
+    # interp_aerial_dist = np.diff(interp_aerial_dist,axis=0)
+    # interp_simmed_dist = np.diff(interp_simmed_dist,axis=0)
     
     # Make matrices intended to hold the moving-average smoothed derivatives (diffs)
     # of the aerial and simulated emissions distributions separately.
-    smooth_aerial_dist = np.zeros((interp_aerial_dist.shape[0]-smoothing_window+1,interp_aerial_dist.shape[1]))
-    smooth_simmed_dist = np.zeros((interp_simmed_dist.shape[0]-smoothing_window+1,interp_simmed_dist.shape[1]))
-    for col in range(smooth_aerial_dist.shape[1]):
-        # Convolve performs the summation over the length of the window (mode="valid" functionally 0-pads)
-        # Dividing by smoothing_window turns the sum into an average
-        smooth_aerial_dist[:,col] = np.convolve(window,interp_aerial_dist[:,col],mode="valid")/smoothing_window
-        smooth_simmed_dist[:,col] = np.convolve(window,interp_simmed_dist[:,col],mode="valid")/smoothing_window
+    smooth_aerial_dist = np.zeros(interp_aerial_dist.shape)
+    smooth_simmed_dist = np.zeros(interp_simmed_dist.shape)
+    
+    # This was the method I was using. But analytica does the average over the past smoothing_window length
+    # smooth_aerial_dist = np.zeros((interp_aerial_dist.shape[0]-smoothing_window+1,interp_aerial_dist.shape[1]))
+    # smooth_simmed_dist = np.zeros((interp_simmed_dist.shape[0]-smoothing_window+1,interp_simmed_dist.shape[1]))
+    # for col in range(smooth_aerial_dist.shape[1]):
+    #     # Convolve performs the summation over the length of the window (mode="valid" functionally 0-pads)
+    #     # Dividing by smoothing_window turns the sum into an average
+    #     smooth_aerial_dist[:,col] = np.convolve(window,interp_aerial_dist[:,col],mode="valid")/smoothing_window
+    #     smooth_simmed_dist[:,col] = np.convolve(window,interp_simmed_dist[:,col],mode="valid")/smoothing_window
+    
+    # interp_aerial_dist = interp_aerial_dist.cumsum(axis=0)
+    # interp_simmed_dist = interp_simmed_dist.cumsum(axis=0)
+    for w in range(len(xs)):
+        wmin = max(0,w - smoothing_window)
+
+        # Taking diff of the cumulative sum between index wmin and wmax gets you the sum of values between those points
+        # Dividing by wmax-wmin gives you the average of values from [wmin:wmax]
+        smooth_aerial_dist[w,:] = (interp_aerial_dist[wmin,:] - interp_aerial_dist[w,:])/max(1,w-wmin)
+        smooth_simmed_dist[w,:] = (interp_simmed_dist[wmin,:] - interp_simmed_dist[w,:])/max(1,w-wmin)
 
     # Find x value at which the difference between the smoothed derivatives
     # switches signs (i.e. where they match, approximately).
@@ -155,15 +169,12 @@ def find_transition_point(
 
     # Always measure the transition point by where the sign switches
     # (and with the above correction, only care about pos-to-negative switch.)
-    transition_point = np.argmin(diff>0,axis=0)
-
-    # The index adjustment accounts for the fact that when the convolution 
-    # only captures points completely within the centered moving-average window, 
-    # the indices of the result are not the same as those of the original arrays
-    idx_adjustment = int(smoothing_window/2) # int(...) rounds down
+    transition_point = np.argmax(diff>0,axis=0)
     
     # Return the x values at each first transition point.
-    return xs[transition_point+idx_adjustment]
+    # Remove 1 from the transition_point index to account for the fact that the 
+    # first value is always 0 in each smoothed distribution diff (think of it as corresponding to 4 kgh)
+    return xs[transition_point-1]
 
 class ROAMSModel:
 
