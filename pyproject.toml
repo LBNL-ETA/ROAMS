@@ -1,0 +1,28 @@
+# Specify the build backend
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# Specify basic metadata
+[project]
+name = "roams"
+dynamic = ["version"]
+license = "MIT"
+authors = [
+    {name = "ETA"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2.0",
+    "numpy>=1.16.1",
+    "matplotlib>=3.10.0",
+    "openpyxl>=3.1.0",
+    "sqlalchemy",
+]
+
+# Specify packages using setuptools find method
+[tool.setuptools.packages.find]
+include = ["roams"]
+
+[tool.setuptools.dynamic]
+version = {attr = "roams.__version__"}
