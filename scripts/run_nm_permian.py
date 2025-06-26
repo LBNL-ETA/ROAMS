@@ -41,7 +41,10 @@ if __name__=="__main__":
         wind_speed_col = "wind_mps",
         coverage_count = "coverage_count",
         asset_type = ("Well site",),
-        outpath = "evan_output"
+        outpath = "evan_output",
+        
+        # Replication flags
+        _reproduce_tp_aerial_input_bug = True,
     )
     r.perform_analysis()
     now = datetime.now()

@@ -6,7 +6,7 @@ import numpy as np
 from roams.aerial.assumptions import power_correction, normal, zero_out
 from roams.aerial.sample import get_aerial_sample
 from roams.aerial.preprocess import account_for_cutoffs
-from roams.aerial.partial_detection import PoD_bin, get_partial_detection_samples
+from roams.aerial.partial_detection import PoD_bin, PoD_linear, get_partial_detection_samples
 
 from roams.simulated.sample import stratify_sample
 
@@ -87,11 +87,12 @@ def find_transition_point(
 
     Returns:
         np.ndarray:
-            A 1x(num MC iterations) array, each of whose entries is roughly 
-            the value of emissions at which the aerial distribution begins 
-            to dominate the combined distribution (i.e. where the derivative 
-            becomes greater.)
-    """    
+            An (num MC iterations)-length array, each of whose entries is 
+            roughly the value of emissions at which the aerial distribution 
+            begins to dominate the combined distribution
+    """
+    # Assert that the number of columns in all the inputs are identical
+    # (Its intended that each column represents a unique monte-carlo run)
     if (aerial_x.shape[1]!=sim_x.shape[1]) or (aerial_y.shape[1]!=sim_y.shape[1]) or (aerial_x.shape[1]!=aerial_y.shape[1]):
         raise IndexError(
             "The columns in the aerial and simulated x and y data are intended to "
@@ -102,7 +103,6 @@ def find_transition_point(
 
     n_mc_runs = aerial_x.shape[1]
     max_interp_emiss = 1000
-    window = np.array([1]*smoothing_window)
 
     xs = np.arange(5,max_interp_emiss,1)
 
@@ -125,25 +125,12 @@ def find_transition_point(
             s_x[~np.isnan(s_x)],
             s_y[~np.isnan(s_x)],
         )
-    # interp_aerial_dist = np.diff(interp_aerial_dist,axis=0)
-    # interp_simmed_dist = np.diff(interp_simmed_dist,axis=0)
     
     # Make matrices intended to hold the moving-average smoothed derivatives (diffs)
     # of the aerial and simulated emissions distributions separately.
     smooth_aerial_dist = np.zeros(interp_aerial_dist.shape)
     smooth_simmed_dist = np.zeros(interp_simmed_dist.shape)
     
-    # This was the method I was using. But analytica does the average over the past smoothing_window length
-    # smooth_aerial_dist = np.zeros((interp_aerial_dist.shape[0]-smoothing_window+1,interp_aerial_dist.shape[1]))
-    # smooth_simmed_dist = np.zeros((interp_simmed_dist.shape[0]-smoothing_window+1,interp_simmed_dist.shape[1]))
-    # for col in range(smooth_aerial_dist.shape[1]):
-    #     # Convolve performs the summation over the length of the window (mode="valid" functionally 0-pads)
-    #     # Dividing by smoothing_window turns the sum into an average
-    #     smooth_aerial_dist[:,col] = np.convolve(window,interp_aerial_dist[:,col],mode="valid")/smoothing_window
-    #     smooth_simmed_dist[:,col] = np.convolve(window,interp_simmed_dist[:,col],mode="valid")/smoothing_window
-    
-    # interp_aerial_dist = interp_aerial_dist.cumsum(axis=0)
-    # interp_simmed_dist = interp_simmed_dist.cumsum(axis=0)
     for w in range(len(xs)):
         wmin = max(0,w - smoothing_window)
 
@@ -200,7 +187,8 @@ class ROAMSModel:
         cutoff_col = "cutoff",
         coverage_count = "coverage_count",
         asset_type = ("Well site",),
-        outpath="evan_output"
+        outpath="evan_output",
+        _reproduce_tp_aerial_input_bug=False,
         ):
 
         self.simmed_emission_file = simmed_emission_file
@@ -224,6 +212,10 @@ class ROAMSModel:
         self.coverage_count = coverage_count
         self.asset_type = asset_type
         self.outpath = outpath
+
+        # Indicators to reproduce individual methodological issues in analytica discovered during translation
+        # (Some combinations of these may result in undefined behavior)
+        self.reproduce_tp_aerial_input_bug = _reproduce_tp_aerial_input_bug
 
     def perform_analysis(self):
         self.load_data()
@@ -417,6 +409,38 @@ class ROAMSModel:
         simmed_cumsum = simmed_cumsum.max(axis=0) - simmed_cumsum
         
         if self.transition_point is None:
+            if self.reproduce_tp_aerial_input_bug:
+                plumes = np.tile(
+                    self.correction_fn(
+                        (self.aerial_plumes["wind_independent_emission_rate_kghmps"]*self.aerial_plumes["wind_mps"]).values
+                    ),
+                    (self.n_mc_samples,1)
+                ).T
+                plumes = self.noise_fn(plumes)
+                plumes[plumes<0] = 0
+                plumes.sort(axis=0)
+                
+                windnorm = np.tile(
+                    self.aerial_plumes["wind_independent_emission_rate_kghmps"].values,
+                    (self.n_mc_samples,1)
+                ).T
+                windnorm.sort(axis=0)
+                # Don't even care about properly aligning indices
+                # Also use the linear interpolation for this particular reproduction 
+                # (regardless of whether the binning was done elsewhere)
+                pd_correction = (1/PoD_linear(windnorm) - 1) * plumes
+
+                _aerial_cumsum = plumes.cumsum(axis=0) + pd_correction.cumsum(axis=0)
+                # Convert it into a decreasing cumulative total
+                _aerial_cumsum = _aerial_cumsum.max(axis=0) - _aerial_cumsum
+
+                self.tp = find_transition_point(
+                    aerial_x = plumes,
+                    aerial_y = _aerial_cumsum,
+                    sim_x = sim_data,
+                    sim_y = simmed_cumsum,
+                )
+
             self.tp = find_transition_point(
                 aerial_x = self.tot_aerial_sample,
                 aerial_y = aerial_cumsum,
@@ -501,8 +525,8 @@ class ROAMSModel:
         
         # In this addition, the expectation is the only one or other is contributing to the sum
         sum_emiss_partial = self.partial_detec_sample.sum(axis=0) + self.extra_emissions_for_cdf.sum(axis=0)
-        prod_summary.loc["Partial Detection Total CH4 emissions (t/h)",("By Itself","Avg")] = sum_emiss_partial.mean()*1e-3
-        prod_summary.loc["Partial Detection Total CH4 emissions (t/h)",("By Itself","Std Dev")] = sum_emiss_partial.std()*1e-3
+        prod_summary.loc["Partial Detection Total CH4 emissions (t/h)",("Accounting for Transition Point","Avg")] = sum_emiss_partial.mean()*1e-3
+        prod_summary.loc["Partial Detection Total CH4 emissions (t/h)",("Accounting for Transition Point","Std Dev")] = sum_emiss_partial.std()*1e-3
         
         # Like above, in this addition there are either additional copies of sampled emissions in `total_aerial_sample`, or the total missing emissions are included in `extra_emissions_for_cdf`.
         sum_emiss_aer_comb = self.tot_aerial_sample.sum(axis=0) + self.extra_emissions_for_cdf.sum(axis=0)
