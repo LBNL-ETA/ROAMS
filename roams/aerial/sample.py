@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from roams.aerial.partial_detection import get_partial_detection_samples, PoD_bin
+from roams.aerial.partial_detection import PoD_bin
 from roams.aerial.assumptions import power_correction, zero_out, normal
 
 def get_aerial_sample(

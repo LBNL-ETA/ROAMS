@@ -30,10 +30,12 @@ if __name__=="__main__":
         source_file = KAIROS_PERMIAN_EMISSIONS_FILENAME,
         covered_productivity_file = COVERED_PRODUCTIVITY_FILE,
         num_wells_to_simulate = 18030,
+        well_visit_count = 81564,
+        wells_per_site = 1.2,
         stratify_sim_sample = True,
         n_mc_samples = 100,
         transition_point = None,
-        partial_detection_correction="add to cumsum", # one of "add samples", "add to cumsum"
+        partial_detection_correction=True,
         simulate_error = True,
         PoD_fn = PoD_bin,
         correction_fn = power_correction,
@@ -42,9 +44,7 @@ if __name__=="__main__":
         coverage_count = "coverage_count",
         asset_type = ("Well site",),
         outpath = "evan_output",
-        
-        # Replication flags
-        _reproduce_tp_aerial_input_bug = True,
+        save_mean_dist = True,
     )
     r.perform_analysis()
     now = datetime.now()
