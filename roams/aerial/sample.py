@@ -1,20 +1,16 @@
 import pandas as pd
 import numpy as np
 
-from roams.aerial.partial_detection import PoD_bin
+from roams.aerial.input import AerialSurveyData
 from roams.aerial.assumptions import power_correction, zero_out, normal
 
-def get_aerial_sample(
-    plumes = None,
-    sources = None,
+def get_aerial_survey(
+    survey : AerialSurveyData,
     simulate_error=True,
     n_mc_samples=100,
     noise_fn = normal,
     handle_zeros = zero_out,
     correction_fn = power_correction,
-    wind_norm_col="wind_independent_emission_rate_kghmps",
-    wind_speed_col="wind_mps",
-    coverage_count="coverage_count",
     ) -> np.ndarray:
     """
     A function that can take a record of covered sources and corresponding 
@@ -24,46 +20,24 @@ def get_aerial_sample(
     additional partial detection samples.
 
     Args:
-        plumes (pd.DataFrame, optional): 
-            The table holding the plume-level data. 
-            Defaults to None.
-
-        sources (pd.DataFrame, optional): 
-            The table holding the source-level data. It's expected that the 
-            index of this table is the unique source id.
-            Defaults to None.
+        survey (AerialSurveyData):
+            An instance of the AerialSurveyData class, or a child thereof.
 
         simulate_error (bool, optional): 
             Whether or not to simulate error by introducing normal noise to 
             the sampled aerial emissions.
-            Defaults to SIMULATE_ERROR.
+            Defaults to True.
 
         n_mc_samples (int, optional): 
             The number of monte-carlo sampling iterations to do. This 
             controls the number of columns that the resulting table will 
             have.
-            Defaults to N.
+            Defaults to 100.
 
         correction_fn (function, optional): 
             The function that deterministically corrects for measurement bias 
             in the sampled emissions values.
             Defaults to power_correction.
-
-        wind_norm_col (str, optional): 
-            The name of the column in the plume file that holds the wind-normalized 
-            emissions values. 
-            Defaults to "wind_independent_emission_rate_kghmps".
-
-        wind_speed_col (str, optional): 
-            The name of the column in the plumes dataset that contain the wind 
-            speed values.  
-            Defaults to "wind_mps".
-
-        coverage_count (str, optional): 
-            The name of the column in the source file that describes how many 
-            times each source was observed during the survey.
-            Defaults to "coverage_count".
-
 
     Returns:
         tuple:
@@ -76,69 +50,76 @@ def get_aerial_sample(
             will not be altered in any way from their original.
     """
     # max_count = maximum number of coverages
-    max_count = sources[coverage_count].max()
+    max_count = survey.production_sources[survey.coverage_count].max()
     
     # df = DataFrame with columns [0, 1, ..., <max coverage - 1>, "coverage_count"]
     # and a number of rows equal to the number of unique sources.
-    df = pd.DataFrame(np.nan,columns=range(max_count),index=sources.index)
-    df[coverage_count] = sources[coverage_count]
+    df = survey.production_sources[[survey.source_id_col,survey.coverage_count]].copy()
+    df.set_index(survey.source_id_col,inplace=True)
+
+    plume_data = survey.production_plumes.copy()
+    
+    # Create a column in common wind-normalized emissions units
+    plume_data["windnorm_em"] = survey.prod_plume_wind_norm
+
+    # Create an emissions rate column in common emissions rate units
+    plume_data["em"] = survey.prod_plume_emissions
 
     # get separate lists of the observed wind-normalized emissions rates and wind speeds
-    emissions_and_wind = (
-        plumes
-        .groupby("emission_source_id")
-        [[wind_norm_col,wind_speed_col]]
+    emiss_and_windnorm_emiss = (
+        plume_data
+        .groupby(survey.source_id_col)
+        [["em","windnorm_em"]]
         .agg(list)
     )
-    # Restrict the plume data to only sources in the source data.
-    emissions_and_wind = emissions_and_wind.loc[sources.index]
 
     # For each possible coverage instance...
     for col in range(max_count):
-        # Assign the nth observed (wind-normalized, wind_mps) value if the nth value exists (i.e., it was observed and emitting), otherwise nan
-        df[col] = emissions_and_wind.apply(
+
+        # Instantiate the colum representing the `col`th coverage instance of each source
+        df[col] = np.nan
+
+        # Assign the nth observed (emissions, wind-normalized emissions) 
+        # value if the nth value exists (i.e., it was observed and emitting), otherwise nan
+        df[col] = emiss_and_windnorm_emiss.apply(
             lambda row: 
-                # nth (wind normalized emm, wind speed) if nth observation exists
-                (row[wind_norm_col][col],row[wind_speed_col][col]) 
+                # nth (emissions, wind-normalized emissions) if nth observation exists
+                (row["em"][col],row["windnorm_em"][col]) 
                 # else nan
-                if len(row[wind_speed_col])>col else np.nan,
+                if len(row["em"])>col else np.nan,
             axis=1,
         )
     
         # For any observations remaining nan that should still count as coverage instance, set them to 0 (i.e., it was observed and was not emitting)
-        df.loc[(df[coverage_count]>col) & (df[col].isna()),col] = 0
+        df.loc[(df[survey.coverage_count]>col) & (df[col].isna()),col] = 0
     
     # Drop the coverage_count column, no longer needed
-    df.drop(columns=coverage_count,inplace=True)
+    df.drop(columns=survey.coverage_count,inplace=True)
 
     # Sample each row N times, excluding NaN values
     # This results in an `emission_source_id`-indexed series whose values are each a 1D np.array type, each representing the sampled observations
     # The values in the sampled 1-D array can be 0 (no emissions observed), or a (wind-normalized emissions, wind speed) pair.
     sample = df.apply(lambda row: row.sample(n_mc_samples,replace=True,weights=1*(~row.isna())).values,axis=1)
 
-    # Wind normalized emissions = 1st entry in tuple, where present
-    wind_normalized_em = np.array(
+    # Emissions rate = 1st entry in tuple, where present
+    emissions = np.array(
         sample.apply(lambda v: [s[0] if type(s)==tuple else s for s in v])
         .values
         .tolist()
     )
 
-    # Wind speed = 2nd entry in tuple, where present
-    wind = np.array(
+    # Wind-normalized emissions rate = 2nd entry in tuple, where present
+    wind_normalized_em = np.array(
         sample.apply(lambda v: [s[1] if type(s)==tuple else s for s in v])
         .values
         .tolist()
     )
 
-    # This is definition of emissions as a function of wind and wind-normalized emissions
-    # TODO (in input layer): make sure that units always align here
-    emissions = wind_normalized_em * wind
     # Apply given correction, if not None
     if correction_fn is not None:
         emissions = correction_fn(emissions)
 
     if simulate_error:
-        # TODO : This has to be factored. Create a function that does this? take shape -> return noise multiplier? Or what?
         emissions = noise_fn(emissions)
     
     # Use function to handle 0s

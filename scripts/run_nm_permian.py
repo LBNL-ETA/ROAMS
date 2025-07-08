@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from roams.analysis import ROAMSModel
-from roams.aerial.sample import PoD_bin
+from roams.aerial.partial_detection import PoD_bin
 from roams.aerial.assumptions import power_correction
 
 COVERED_PRODUCTIVITY_FILE = "/Users/eneill/repos/ROAMS/data/production/Covered_gas_prod_percentiles_all_basins_by_well_Kairos_NM_Permian20221021.csv"
@@ -23,6 +23,7 @@ if __name__=="__main__":
 
     now = datetime.now()
     print(f"Starting run with at {now.hour}:{now.minute}:{now.second}")
+
     r = ROAMSModel(
         simmed_emission_file = SUB_MDL_FILENAME,
         simmed_emission_sheet = SUB_MDL_SHEETNAME,
@@ -39,13 +40,20 @@ if __name__=="__main__":
         simulate_error = True,
         PoD_fn = PoD_bin,
         correction_fn = power_correction,
+        source_id_name = "emission_source_id",
+        cutoff_col = None,
+        em_col = None,
+        em_unit = None,
         wind_norm_col = "wind_independent_emission_rate_kghmps",
+        wind_norm_unit = "kgh:mps",
         wind_speed_col = "wind_mps",
+        wind_speed_unit = "mps",
+        asset_col="asset_type",
         coverage_count = "coverage_count",
-        asset_type = ("Well site",),
-        outpath = "evan_output",
+        outpath = "evan output",
         save_mean_dist = True,
     )
+
     r.perform_analysis()
     now = datetime.now()
     print(f"Run finished at {now.hour}:{now.minute}:{now.second}")

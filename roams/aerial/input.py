@@ -27,7 +27,7 @@ class AerialSurveyData:
     sets by asset type).
 
     When creating an instance of this class, at least two out of three of:
-        * emissions rate (emm_col)
+        * emissions rate (em_col)
         * wind-normalized emissions rate (wind_norm_col)
         * wind speed (wind_speed_col)
     
@@ -64,12 +64,12 @@ class AerialSurveyData:
             same column name in both tables, and that the sources identified 
             in the plume table can be found in the source table.
         
-        emm_col (str, optional): 
+        em_col (str, optional): 
             The name of the column in the plumes table that holds the 
             emissions rate in dimensions of [mass]/[time].
         
-        emm_unit (str, optional): 
-            The unit of the emissions rate column given in `emm_col`. The 
+        em_unit (str, optional): 
+            The unit of the emissions rate column given in `em_col`. The 
             physical unit is always expected to be in the dimensions of 
             [mass / time], e.g. "kg/h".
             Defaults to None.
@@ -146,8 +146,8 @@ class AerialSurveyData:
         plume_file : str,
         source_file: str,
         source_id_col : str,
-        emm_col : str = None,
-        emm_unit : str = None,
+        em_col : str = None,
+        em_unit : str = None,
         wind_norm_col : str = None,
         wind_norm_unit : str = None,
         wind_speed_col : str = None,
@@ -166,18 +166,18 @@ class AerialSurveyData:
 
         # If the emissions rate column is given, assert that the column is 
         # in the table and the unit is specified.
-        if emm_col is not None:
+        if em_col is not None:
             
-            if emm_unit is None:
+            if em_unit is None:
                 raise ValueError(
-                    f"The {emm_col = } is specified, but emm_unit "
+                    f"The {em_col = } is specified, but em_unit "
                     "is not specified. The AerialSurveyData class can't "
                     "make use of this column without knowing what the units are."
                 )
             
-            if emm_col not in self._raw_plumes.columns:
+            if em_col not in self._raw_plumes.columns:
                 raise KeyError(
-                    f"{emm_col = } is given in the input to AerialSurveyData, "
+                    f"{em_col = } is given in the input to AerialSurveyData, "
                     f"but it isn't in the associated {plume_file = }. You should make "
                     "sure you're using the right column name and file."
                 )
@@ -219,21 +219,27 @@ class AerialSurveyData:
                 )
         
         if sum(
-            [emm_col is None,wind_norm_col is None, wind_speed_col is None]
+            [em_col is None,wind_norm_col is None, wind_speed_col is None]
             )>1:
             raise ValueError(
-                "At least two of emm_unit, wind_norm_unit, and wind_speed_unit "
+                "At least two of em_unit, wind_norm_unit, and wind_speed_unit "
                 "are `None` in the input to AerialSurveyData. But at least two "
                 "of them must be provided."
             )
             
-        self._emm_col = emm_col
-        self._emm_unit = emm_unit
+        self._em_col = em_col
+        self._data_em_unit = em_unit
         self._wind_norm_col = wind_norm_col
-        self._wind_norm_unit = wind_norm_unit
+        self._data_wind_norm_unit = wind_norm_unit
         self._wind_speed_col = wind_speed_col
-        self._wind_speed_unit = wind_speed_unit
+        self._data_wind_speed_unit = wind_speed_unit
         self._cutoff_col = cutoff_col
+
+        # Set the units used to define the units of entrypoint attributes
+        # (changing these alters the units of the output quantities)
+        self.windspeed_units = COMMON_WIND_SPEED_UNITS
+        self.emissions_units = COMMON_EMISSIONS_UNITS
+        self.wind_norm_emissions_units = COMMON_WIND_NORM_EM_UNITS
         
         # Read the source data
         self._raw_source = pd.read_csv(source_file)
@@ -247,12 +253,9 @@ class AerialSurveyData:
                     "be necessary for all of the ensuing computations."
                 )
             
-        if asset_col not in self._raw_source.columns:
-            raise KeyError(
-                f"{asset_col = } is not in your source table. Are you using "
-                "the right name, and the right data set?"
-            )
+        self.coverage_count = coverage_count
         self.asset_col = asset_col
+        self.source_id_col = source_id_col
             
         if prod_asset_type is None:
             raise ValueError(
@@ -365,11 +368,11 @@ class AerialSurveyData:
 
         # If the emissions column was given, then just return that value
         # converted into the appropriate unit
-        if self._emm_col is not None:
+        if self._em_col is not None:
             return convert_units(
-                self.production_plumes[self._emm_col].values,
-                self._emm_unit,
-                COMMON_EMISSIONS_UNITS
+                self.production_plumes[self._em_col].values,
+                self._data_em_unit,
+                self.emissions_units
             )
         
         # Otherwise compute using the remaining quantities
@@ -381,11 +384,11 @@ class AerialSurveyData:
 
         # If the emissions column was given, then just return that value
         # converted into the appropriate unit
-        if self._emm_col is not None:
+        if self._em_col is not None:
             return convert_units(
-                self.midstream_plumes[self._emm_col].values,
-                self._emm_unit,
-                COMMON_EMISSIONS_UNITS
+                self.midstream_plumes[self._em_col].values,
+                self._data_em_unit,
+                self.emissions_units
             )
 
         # Otherwise compute using the remaining quantities
@@ -400,10 +403,10 @@ class AerialSurveyData:
         # [emissions rate]/[windspeed]).
         if self._wind_norm_col is not None:
             # E.g. numer, denom = "kg/d", "mph"
-            numer, denom = self._wind_norm_unit.lower().split(":")
+            numer, denom = self._data_wind_norm_unit.lower().split(":")
             
             # E.g. target_numer, target_denom = "kgh", "mps"
-            target_numer, target_denom = COMMON_WIND_NORM_EM_UNITS.lower().split(":")
+            target_numer, target_denom = self.wind_norm_emissions_units.lower().split(":")
 
             # Interim output in converted numerator units
             # E.g. "kgh / mph"
@@ -430,10 +433,10 @@ class AerialSurveyData:
         # [emissions rate]/[windspeed]).
         if self._wind_norm_col is not None:
             # E.g. numer, denom = "kg/d", "mph"
-            numer, denom = self._wind_norm_unit.lower().split(":")
+            numer, denom = self._data_wind_norm_unit.lower().split(":")
             
             # E.g. target_numer, target_denom = "kgh", "mps"
-            target_numer, target_denom = COMMON_WIND_NORM_EM_UNITS.lower().split(":")
+            target_numer, target_denom = self.wind_norm_emissions_units.lower().split(":")
 
             # Interim output in converted numerator units
             # E.g. "kgh / mph"
@@ -459,8 +462,8 @@ class AerialSurveyData:
         if self._wind_speed_col is not None:
             return convert_units(
                 self.production_plumes[self._wind_speed_col].values,
-                self._wind_speed_unit,
-                COMMON_WIND_SPEED_UNITS
+                self._data_wind_speed_unit,
+                self.windspeed_units
             )
 
         # Otherwise compute using the remaining quantities
@@ -474,8 +477,8 @@ class AerialSurveyData:
         if self._wind_speed_col is not None:
             return convert_units(
                 self.midstream_plumes[self._wind_speed_col].values,
-                self._wind_speed_unit,
-                COMMON_WIND_SPEED_UNITS
+                self._data_wind_speed_unit,
+                self.windspeed_units
             )
 
         # Otherwise compute using the remaining quantities
@@ -490,11 +493,3 @@ class AerialSurveyData:
     def midstream_source_ids(self) -> np.ndarray:
         # The identifiers of midstream sources in the aerial data
         return self.midstream_sources[self.source_id_col].values
-    
-    @property
-    def emissions_units(self) -> str:
-        return COMMON_EMISSIONS_UNITS
-    
-    @property
-    def wind_norm_emissions_units(self) -> str:
-        return COMMON_WIND_NORM_EM_UNITS
