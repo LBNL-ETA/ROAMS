@@ -545,6 +545,21 @@ class ROAMSModel:
             # Find the first index where the aerial emissions in this column are ≥transition point
             idx_above_transition = np.argmin(self.combined_samples[:,n]<tp)
 
+            if len(sim_below_transition)<idx_above_transition:
+                raise IndexError(
+                    f"In monte-carlo iteration {n}, there are "
+                    f"{len(sim_below_transition)} simulated emissions values "
+                    f"below the transition point (={tp}), but "
+                    f"{idx_above_transition} infrastructure sites to try to "
+                    f"simulate (out of {self.num_wells_to_simulate} total). "
+                    "The code usually fills each such site by choosing with "
+                    "replacement from the available simulated emissions, but "
+                    "in this case the code doesn't know what to do without "
+                    "either leaving some 0s between them, or perhaps "
+                    "over-estimating the simulated contribution by adding "
+                    "extra simulated records."
+                )
+
             # For all preceding indices, insert random simulated emissions below the transition point
             self.combined_samples[:idx_above_transition,n] = np.random.choice(sim_below_transition,idx_above_transition,replace=True)
             
