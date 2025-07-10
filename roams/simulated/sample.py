@@ -88,7 +88,8 @@ def stratify_sample(
                 sim_quantiles,
                 right=False,
                 labels=quantiles[1:]
-            )
+            ),
+            observed=False
         )
         
         # Count the covered productivity in each quantile bin

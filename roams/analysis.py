@@ -1,16 +1,18 @@
 import os
+import logging
 
 import pandas as pd
 import numpy as np
 
 from matplotlib import pyplot as plt
 
+from roams.conf import RESULT_DIR
+
 from roams.aerial.assumptions import power_correction, normal, zero_out
 from roams.aerial.sample import get_aerial_survey
 from roams.aerial.input import AerialSurveyData
 from roams.aerial.partial_detection import PoD_bin, PoD_linear
 from roams.transition_point import find_transition_point
-
 from roams.simulated.sample import stratify_sample
 
 class ROAMSModel:
@@ -246,6 +248,11 @@ class ROAMSModel:
             of the estimated production distributions (i.e. aerial, partial 
             detection, simulated).
             Defaults to True.
+        
+        loglevel (int, optional): 
+            The log level to apply to analysis happening within the ROAMSModel 
+            and submodules that it calls on.
+            Defaults to logging.INFO
     """
     def __init__(
         self,
@@ -278,9 +285,16 @@ class ROAMSModel:
         asset_col = None,
         prod_asset_type = ("Well site",),
         midstream_asset_type = ("Pipeline","Compressor Station"),
-        outpath="evan_output",
+        foldername="evan_output",
         save_mean_dist = True,
+        loglevel=logging.INFO,
         ):
+        self.outfolder = os.path.join(RESULT_DIR,foldername)
+        # self._setLogger(outpath=foldername)
+        # self.log.info("Creating a new ROAMSModel")
+        self.log = logging.getLogger("roams.analysis.ROAMSModel")
+        self.log.setLevel(loglevel)
+        self.loglevel = loglevel
 
         # The simulation input file
         self.simmed_emission_file = simmed_emission_file
@@ -323,7 +337,7 @@ class ROAMSModel:
         ):
             raise ValueError(
                 "The `transition_point` argument to the ROAMSModel class can "
-                "only be `None` or a numerical value."
+                "only be `None` or a Python-native numerical value."
             )
         
         # Properties of surveyed infrastructure
@@ -333,13 +347,13 @@ class ROAMSModel:
         
         # Output specification, including making blank dictionary of table 
         # outputs.
-        self.outpath = outpath
         self.save_mean_dist = save_mean_dist
         self.table_outputs = dict()
 
         # Quantiles used in quantification of MC results 
         # (no reason to mess with this)
         self._quantiles = (.025,.975)
+        self.log.debug(f"{self._quantiles = }")
 
     def perform_analysis(self):
         """
@@ -368,6 +382,7 @@ class ROAMSModel:
         Load the aerial data, segregated into records of plumes and sources 
         separately.
         """
+        self.log.info("Loading simulated and aerial data...")
         self.read_simulated_data()
         self.read_aerial_data()
 
@@ -380,6 +395,9 @@ class ROAMSModel:
             tuple[np.ndarray]:
                 A tuple of (simulated emissions, simulated productivity)
         """
+        self.log.info(
+            f"Reading simulated data from {self.simmed_emission_file = }"
+        )
         sub_mdl_sims = pd.read_excel(
             self.simmed_emission_file,
             sheet_name=self.simmed_emission_sheet
@@ -399,15 +417,6 @@ class ROAMSModel:
             surveyClass (AerialSurveyData, optional):
                 An optional class (intended to be a child of AerialSurveyData)
                 to be used to parse the aerial plume and source data.
-        
-        Raises:
-            KeyError:
-                When no sources remain after filtering for the desired 
-                asset type.
-
-        Returns:
-            tuple[np.ndarray]:
-                A tuple of (plume data, source data).
         """
         self.survey = surveyClass(
             self.plume_file,
@@ -425,10 +434,13 @@ class ROAMSModel:
             asset_col = self.asset_col,
             prod_asset_type = self.prod_asset_type,
             midstream_asset_type = self.midstream_asset_type,
-
+            loglevel=self.loglevel,
         )
     
     def read_covered_productivity(self) -> np.ndarray:
+        self.log.info(
+            f"Reading covered productivity from {self.covered_productivity_file}"
+        )
         covered_productivity = pd.read_csv(self.covered_productivity_file)
         return covered_productivity["New Mexico Permian 2021 (mscf/site/day)"].values
     
@@ -436,14 +448,35 @@ class ROAMSModel:
         """
         Call methods that will make the sample of simulated production 
         emissions, and 
-        """        
+        """
         self.simulated_sample = self.make_simulated_sample()
         (
             self.tot_aerial_sample, 
             self.partial_detection_emissions
         ) = self.make_aerial_sample()
 
-    def make_simulated_sample(self):
+    def make_simulated_sample(self) -> np.ndarray:
+        """
+        Take the long list of simulated emissions, and return a sample of 
+        this data for each monte carlo iteration.
+
+        If directed to stratify the simulated sample, it will use externally 
+        provided production data that describes the distribution of production 
+        in the covered basin, and re-sample the simulated data so that the 
+        distribution of production in the simulated data is as similar as 
+        possible.
+
+        Raises:
+            ValueError:
+                When the code is directed to do stratification, but there is 
+                no corresponding file that provides productivity in the 
+                covered basin.
+
+        Returns:
+            np.ndarray:
+                A (number of simulated wells)x(number monte-carlo iterations) 
+                table of values. Each value is a simulated emissions value.
+        """        
         if self.stratify_sim_sample:
             if self.covered_productivity_file is None:
                 raise ValueError(
@@ -461,6 +494,10 @@ class ROAMSModel:
             sub_mdl_dist = self.simulated_em
 
         # Sample the stratified representation for each monte carlo iteration
+        self.log.info(
+            "Sampling simulated emissions data into a "
+            f"{self.num_wells_to_simulate}x{self.n_mc_samples} table."
+        )
         sub_mdl_sample = np.random.choice(
             sub_mdl_dist,
             (self.num_wells_to_simulate,self.n_mc_samples),
@@ -490,6 +527,16 @@ class ROAMSModel:
             simulate_error = self.simulate_error,
             correction_fn = self.correction_fn,
         )
+        self.log.info(
+            f"The aerial sample is size={aerial_prod_site_sample.shape}, "
+            f"and will be put into a table with {self.num_wells_to_simulate} "
+            "rows (with 0-padding)."
+        )
+        self.log.debug(
+            "The mean total aerial sample emissions are "
+            f"{aerial_prod_site_sample.sum(axis=0).mean():.2f} "
+            f"{self.survey.emissions_units}"
+        )
 
         # Number of required extra rows to simulate all covered wells
         # (these padding 0s may not be required)
@@ -518,9 +565,17 @@ class ROAMSModel:
         # emissions, if the form of the partial detection correction is "add to cumsum"
         # (otherwise maintain the calculation structure, but just use a table of 0s)
         if self.partial_detection_correction:
+            self.log.info(
+                f"Using {self.PoD_fn} on the sorted wind-normalized sample "
+                "to define the probability of detection."
+            )
             PoD = self.PoD_fn(tot_windnorm_sample)
             extra_emissions_for_cdf = (1/PoD - 1)*tot_aerial_sample
         else:
+            self.log.info(
+                "No partial detection correction will be applied to the "
+                "aerial sample."
+            )
             extra_emissions_for_cdf = np.zeros(tot_aerial_sample.shape)
 
         return tot_aerial_sample, extra_emissions_for_cdf
@@ -567,6 +622,10 @@ class ROAMSModel:
         Lastly, the resulting combined distributions are sorted ascending.
         """
         if self.transition_point is None:
+            self.log.info(
+                "No transition point was provided, it will be computed by "
+                "comparing the simulated and aerial distributions."
+            )
             # aerial_cumsum = combined increasing cumulative sum of sampled aerial 
             #   emissions AND contributions from partial detection.
             aerial_cumsum = self.tot_aerial_sample.cumsum(axis=0) + self.partial_detection_emissions.cumsum(axis=0)
@@ -589,7 +648,15 @@ class ROAMSModel:
                 sim_x = sim_data,
                 sim_y = simmed_cumsum,
             )
+            self.log.debug(
+                f"The computed average transition point is {self.tp.mean()}"
+            )
         elif isinstance(self.transition_point,(int,float,)):
+            self.log.info(
+                f"The transition point was provided as {self.transition_point}, "
+                "and will be used directly to combine aerial and simulated "
+                "emissions distributions."
+            )
             self.tp = np.array([self.transition_point]*self.n_mc_samples)
 
         # To start the process, define `self.combined_samples` as the aerial sample.
@@ -648,19 +715,20 @@ class ROAMSModel:
 
         All outputs are intended to be saved into `self.outpath`.
         """
+        # Make the outpath folder if it doesn't exist.
+        if not os.path.exists(self.outfolder):
+            os.mkdir(self.outfolder)
+
         # Call methods that add content to self.table_outputs
         self.make_tabular_outputs()
-        
-        # Make the outpath folder if it doesn't exist.
-        if not os.path.exists(self.outpath):
-            os.mkdir(self.outpath)
 
         # For each table name : pd.DataFrame pair, write it to the outpath.
         for name, table in self.table_outputs.items():
             if not name.endswith(".csv"):
                 name += ".csv"
             
-            table.to_csv(os.path.join(self.outpath,name))
+            self.log.info(f"Saving {name} to {self.outfolder}")
+            table.to_csv(os.path.join(self.outfolder,name))
         
         self.gen_plots()
 
@@ -690,6 +758,7 @@ class ROAMSModel:
         interest, like what the kg/h values are at certain percentages, and
         what the percentage values are at certain kg/h values.
         """
+        self.log.info("Creating the production summary tables")
         # E.g. quantity_cols = ["Avg","2.5% CI","97.5% CI"]
         quantity_cols = ["Avg",*[str(100*q)+"% CI" for q in self._quantiles]]
 
@@ -856,6 +925,7 @@ class ROAMSModel:
                 In the context of plots created for papers, the "emissions" 
                 are the X, and the "cumulative emissions" are the Y.
         """
+        self.log.info("Creating the mean production distribution tables")
         output = pd.DataFrame()
         
         # Define factor for translating observed percentiles to confidence
@@ -987,5 +1057,9 @@ class ROAMSModel:
         plt.xlabel("Emissions Rate (kg/h)")
         plt.legend()
 
-        plt.savefig(os.path.join(self.outpath, "combined_cumulative.svg"))
-        plt.savefig(os.path.join(self.outpath, "combined_cumulative.png"))
+        self.log.info(
+            "Saving the combined cumulative distribution plot to "
+            f"{os.path.join(self.outfolder, 'combined_cumulative.svg/png')}"
+        )
+        plt.savefig(os.path.join(self.outfolder, "combined_cumulative.svg"))
+        plt.savefig(os.path.join(self.outfolder, "combined_cumulative.png"))

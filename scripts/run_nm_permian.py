@@ -1,5 +1,4 @@
-import numpy as np
-import pandas as pd
+import logging
 
 from roams.analysis import ROAMSModel
 from roams.aerial.partial_detection import PoD_bin
@@ -19,10 +18,20 @@ KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permia
 KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/old_source_data.csv"
 
 if __name__=="__main__":
-    from datetime import datetime
+    log = logging.getLogger("run_nm_permian")
+    log.setLevel(logging.INFO)
 
-    now = datetime.now()
-    print(f"Starting run with at {now.hour}:{now.minute}:{now.second}")
+    from argparse import ArgumentParser
+    parser = ArgumentParser(
+        description = "Script to run the ROAMS model for the New Mexico Permian campaign"
+    )
+
+    parser.add_argument("--debug",action="store_true",default=False,help="Whether to log debug messages to the console (they are always logged to a log file)")
+
+    args = parser.parse_args()
+    loglevel = logging.DEBUG if args.debug else logging.INFO
+
+    log.info("Starting run")
 
     r = ROAMSModel(
         simmed_emission_file = SUB_MDL_FILENAME,
@@ -50,10 +59,11 @@ if __name__=="__main__":
         wind_speed_unit = "mps",
         asset_col="asset_type",
         coverage_count = "coverage_count",
-        outpath = "evan output",
+        foldername = "evan output",
         save_mean_dist = True,
+        loglevel = loglevel
     )
 
     r.perform_analysis()
-    now = datetime.now()
-    print(f"Run finished at {now.hour}:{now.minute}:{now.second}")
+    
+    log.info("Run finished")

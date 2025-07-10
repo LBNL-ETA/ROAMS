@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 
@@ -139,8 +141,13 @@ class AerialSurveyData:
             A tuple of values in the `asset_col` of the source table that 
             correspond to what should be counted as midstream infrastructure.
             Defaults to None.
-    """
 
+        log (logging.Logger, optional):
+            A log to which log messages will be passed.
+            If None, the AerialSurveyData class will use the `logging.conf` 
+            in the repo root to create a logger object, which will log only 
+            to the console.
+    """
     def __init__(
         self,
         plume_file : str,
@@ -158,10 +165,17 @@ class AerialSurveyData:
         asset_col : str = None,
         prod_asset_type : tuple = None,
         midstream_asset_type : tuple = None,
+        loglevel : int = logging.INFO,
     ):
+        self.log = logging.getLogger("roams.aerial.input.AerialSurveyData")
+        self.log.setLevel(loglevel)
+        self.loglevel = loglevel
+
+        # E.g. self.source_id_col = "emission_source_id"
         self.source_id_col = source_id_col
 
         # Read the plume data
+        self.log.info(f"Reading plume data from {plume_file}")
         self._raw_plumes = pd.read_csv(plume_file)
 
         # If the emissions rate column is given, assert that the column is 
@@ -235,13 +249,18 @@ class AerialSurveyData:
         self._data_wind_speed_unit = wind_speed_unit
         self._cutoff_col = cutoff_col
 
-        # Set the units used to define the units of entrypoint attributes
-        # (changing these alters the units of the output quantities)
+        self.log.debug(f"Emissions column '{self._em_col}' has units of '{self._data_em_unit}'")
+        self.log.debug(f"Wind-normalized emissions column '{self._wind_norm_col}' has units of '{self._data_wind_norm_unit}'")
+        self.log.debug(f"Wind speed column '{self._wind_speed_col}' has units of '{self._data_wind_speed_unit}'")
+
+        # These attributes will define the output units of the properties
+        # that are intended to be used to interact with the aerial survey data
         self.windspeed_units = COMMON_WIND_SPEED_UNITS
         self.emissions_units = COMMON_EMISSIONS_UNITS
         self.wind_norm_emissions_units = COMMON_WIND_NORM_EM_UNITS
         
         # Read the source data
+        self.log.info(f"Reading source data from {source_file}")
         self._raw_source = pd.read_csv(source_file)
         
         # Assert that the coverage count and asset description columns are 
@@ -301,6 +320,10 @@ class AerialSurveyData:
                 of behavior.
         """        
         if self._cutoff_col is None:
+            self.log.info(
+                "No cutoff column was given to the survey class, "
+                "so it will assume there are no cutoff plumes to handle."
+            )
             return
         
         if self._cutoff_col not in self._raw_plumes.columns:
@@ -311,6 +334,10 @@ class AerialSurveyData:
             )
         
         if cutoff_handling=="drop":
+            self.log.info(
+                f"The code will drop plumes with '{self._cutoff_col}'=True "
+                "in the plume table."
+            )
             self._raw_plumes = self._raw_plumes.loc[
                 ~self._raw_plumes[self._cutoff_col]
             ]
@@ -334,12 +361,22 @@ class AerialSurveyData:
         tables have 0 rows - it's possible that data from a survey may 
         only observe plumes from one type of source or another.
         """
+        self.log.info(
+            f"Filtering production assets based on {self.asset_col} being "
+            f"one of: {', '.join(self.prod_asset_type)}."
+        )
         # Production sources = 100% of the content of the raw source table, 
         # but only the rows whose asset description column have values that 
         # match those prescribed by self.prod_asset_type
         self.production_sources = self._raw_source.loc[
             self._raw_source[self.asset_col].isin(self.prod_asset_type)
         ]
+        self.log.debug(
+            f"After filtering for specified production assets "
+            f"({', '.join(self.prod_asset_type)}), "
+            f"there are {len(self.production_sources)} records left in the "
+            "production sources table."
+        )
         
         # Production plumes = 100% of the content of the raw plumes table, 
         # but only the rows whose sources have been identified as production 
@@ -347,13 +384,29 @@ class AerialSurveyData:
         self.production_plumes = self._raw_plumes.loc[
             self._raw_plumes[self.source_id_col].isin(self.production_sources[self.source_id_col])
         ]
+        self.log.debug(
+            f"After filtering for specified production assets "
+            f"({', '.join(self.prod_asset_type)}), "
+            f"there are {len(self.production_plumes)} records left in the "
+            "production plumes table."
+        )
 
+        self.log.info(
+            f"Filtering midstream assets based on {self.asset_col} being "
+            f"one of: {', '.join(self.midstream_asset_type)}."
+        )
         # Midstream sources = 100% of the content of the raw source table, 
         # but only the rows whose asset description column have values that 
         # match those prescribed by self.midstream_asset_type
         self.midstream_sources = self._raw_source.loc[
             self._raw_source[self.asset_col].isin(self.midstream_asset_type)
         ]
+        self.log.debug(
+            f"After filtering for specified midstream assets "
+            f"({', '.join(self.midstream_asset_type)}), "
+            f"there are {len(self.midstream_sources)} records left in the "
+            "midstream sources table."
+        )
         
         # Midstream plumes = 100% of the content of the raw plumes table, 
         # but only the rows whose sources have been identified as midstream 
@@ -361,6 +414,12 @@ class AerialSurveyData:
         self.midstream_plumes = self._raw_plumes.loc[
             self._raw_plumes[self.source_id_col].isin(self.midstream_sources[self.source_id_col])
         ]
+        self.log.debug(
+            f"After filtering for specified midstream assets "
+            f"({', '.join(self.midstream_asset_type)}), "
+            f"there are {len(self.midstream_plumes)} records left in the "
+            "midstream plumes table."
+        )
     
     @property
     def prod_plume_emissions(self) -> np.ndarray:
