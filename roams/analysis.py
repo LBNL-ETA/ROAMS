@@ -9,11 +9,10 @@ from matplotlib import pyplot as plt
 from roams.conf import RESULT_DIR
 
 from roams.aerial.assumptions import power_correction, normal, zero_out
-from roams.aerial.sample import get_aerial_survey
 from roams.aerial.input import AerialSurveyData
 from roams.aerial.partial_detection import PoD_bin, PoD_linear
 from roams.transition_point import find_transition_point
-from roams.simulated.sample import stratify_sample
+from roams.simulated.stratify import stratify_sample
 
 class ROAMSModel:
     """
@@ -239,9 +238,11 @@ class ROAMSModel:
             in the estimation of aerial emissions.
             Defaults to ("Well site",).
         
-        outpath (str, optional): 
-            A folder name into which given outputs will be saved.
-            Defaults to "evan_output".
+        foldername (str, optional): 
+            A folder name into which given outputs will be saved under 
+            "run_results" (=roams.conf.RESULT_DIR).
+            If None, will use a timestamp.
+            Defaults to None.
         
         save_mean_dist (bool, optional): 
             Whether or not to save a "mean" distribution of all the components
@@ -285,13 +286,19 @@ class ROAMSModel:
         asset_col = None,
         prod_asset_type = ("Well site",),
         midstream_asset_type = ("Pipeline","Compressor Station"),
-        foldername="evan_output",
+        foldername=None,
         save_mean_dist = True,
         loglevel=logging.INFO,
         ):
+        # If result folder name not specified, use a timestamp.
+        if foldername is None:
+            import datetime
+            # E.g. foldername = "1 Jan 2000 01-23-45"
+            foldername = datetime.now().strftime("%d %b %Y %H%M%S")
+        
         self.outfolder = os.path.join(RESULT_DIR,foldername)
-        # self._setLogger(outpath=foldername)
-        # self.log.info("Creating a new ROAMSModel")
+
+        # Set the log using prescribed level
         self.log = logging.getLogger("roams.analysis.ROAMSModel")
         self.log.setLevel(loglevel)
         self.loglevel = loglevel
@@ -438,6 +445,15 @@ class ROAMSModel:
         )
     
     def read_covered_productivity(self) -> np.ndarray:
+        """
+        Read the file containing the covered productivity (supposed to be 
+        a file just containing a list of estimated production values for all 
+        covered production assets.).
+
+        Returns:
+            np.ndarray: 
+                A 1-d array of estimated gas production. 
+        """
         self.log.info(
             f"Reading covered productivity from {self.covered_productivity_file}"
         )
@@ -447,7 +463,8 @@ class ROAMSModel:
     def make_samples(self):
         """
         Call methods that will make the sample of simulated production 
-        emissions, and 
+        emissions, and also the aerial sample (meaning both the sampled 
+        aerial emissions and corresponding partial detection correction.)
         """
         self.simulated_sample = self.make_simulated_sample()
         (
@@ -519,14 +536,7 @@ class ROAMSModel:
                 detection samples), and extra emissions that may be added in 
                 lieu of duplicated samples
         """
-        aerial_prod_site_sample, prod_wind_norm_sample = get_aerial_survey(
-            survey = self.survey,
-            n_mc_samples = self.n_mc_samples,
-            noise_fn = self.noise_fn,
-            handle_zeros = self.handle_zeros,
-            simulate_error = self.simulate_error,
-            correction_fn = self.correction_fn,
-        )
+        aerial_prod_site_sample, prod_wind_norm_sample = self.get_aerial_survey_sample()
         self.log.info(
             f"The aerial sample is size={aerial_prod_site_sample.shape}, "
             f"and will be put into a table with {self.num_wells_to_simulate} "
@@ -579,6 +589,123 @@ class ROAMSModel:
             extra_emissions_for_cdf = np.zeros(tot_aerial_sample.shape)
 
         return tot_aerial_sample, extra_emissions_for_cdf
+    
+    def get_aerial_survey_sample(self) -> np.ndarray:
+        """
+        A function that can take a record of covered sources and corresponding 
+        plumes (it's OK if there are plumes that dont correspond to any listed source - 
+        they are excluded), and samples the plume observations, accounting for 
+        observed intermittency. It then applies noise and deterministic 
+        correction.
+
+        It's supposed to return the sample of emissions and their corresponding 
+        wind-normalized counterparts.
+
+        Returns:
+            tuple:
+                A tuple of (aerial sample, wind-normalized sample) tables. Each 
+                table has n_mc_samples columns - each corresponding to its own 
+                monte carlo iteration (consistent between the two), and a number 
+                of rows equal to the number of unique sources in the input tables.
+                Based on the input arguments, these emissions have noise applied, 
+                and may be bias corrected. The wind-normalized emissions values
+                will not be altered in any way from their original.
+        """
+        # max_count = maximum number of coverages
+        max_count = self.survey.production_sources[self.survey.coverage_count].max()
+        
+        # df = DataFrame with columns [0, 1, ..., <max coverage - 1>, "coverage_count"]
+        # and a number of rows equal to the number of unique sources.
+        df = self.survey.production_sources[
+            [self.survey.source_id_col,self.survey.coverage_count]
+        ].copy()
+        df.set_index(self.survey.source_id_col,inplace=True)
+
+        plume_data = self.survey.production_plumes.copy()
+        
+        # Create a column in common wind-normalized emissions units
+        plume_data["windnorm_em"] = self.survey.prod_plume_wind_norm
+
+        # Create an emissions rate column in common emissions rate units
+        plume_data["em"] = self.survey.prod_plume_emissions
+
+        # get separate lists of the observed wind-normalized emissions rates and wind speeds
+        emiss_and_windnorm_emiss = (
+            plume_data
+            .groupby(self.survey.source_id_col)
+            [["em","windnorm_em"]]
+            .agg(list)
+        )
+
+        self.log.debug(f"The highest coverage count is {max_count}")
+        # For each possible coverage instance...
+        for col in range(max_count):
+
+            # Instantiate the colum representing the `col`th coverage instance of each source
+            df[col] = np.nan
+
+            # Assign the nth observed (emissions, wind-normalized emissions) 
+            # value if the nth value exists (i.e., it was observed and emitting), otherwise nan
+            df[col] = emiss_and_windnorm_emiss.apply(
+                lambda row: 
+                    # nth (emissions, wind-normalized emissions) if nth observation exists
+                    (row["em"][col],row["windnorm_em"][col]) 
+                    # else nan
+                    if len(row["em"])>col else np.nan,
+                axis=1,
+            )
+        
+            self.log.debug(
+                f"Source plume number {col+1} was covered and emitting for "
+                f"{(~df[col].isna()).sum()} plumes. It was covered but not "
+                f"emitting for {((df[self.survey.coverage_count]>col) & (df[col].isna())).sum()} plumes."
+            )
+            # For any observations remaining nan that should still count as coverage instance, set them to 0 (i.e., it was observed and was not emitting)
+            df.loc[(df[self.survey.coverage_count]>col) & (df[col].isna()),col] = 0
+        
+        # Drop the coverage_count column, no longer needed
+        df.drop(columns=self.survey.coverage_count,inplace=True)
+
+        # Sample each row N times, excluding NaN values
+        # This results in an `emission_source_id`-indexed series whose values are each a 1D np.array type, each representing the sampled observations
+        # The values in the sampled 1-D array can be 0 (no emissions observed), or a (wind-normalized emissions, wind speed) pair.
+        sample = df.apply(
+            lambda row: row.sample(self.n_mc_samples,replace=True,weights=1*(~row.isna())).values,
+            axis=1
+        )
+
+        # Emissions rate = 1st entry in tuple, where present
+        emissions = np.array(
+            sample.apply(lambda v: [s[0] if type(s)==tuple else s for s in v])
+            .values
+            .tolist()
+        )
+
+        # Wind-normalized emissions rate = 2nd entry in tuple, where present
+        wind_normalized_em = np.array(
+            sample.apply(lambda v: [s[1] if type(s)==tuple else s for s in v])
+            .values
+            .tolist()
+        )
+
+        # Apply given correction, if not None
+        if self.correction_fn is not None:
+            self.log.debug(f"Applying {self.correction_fn} to sampled emissions")
+            emissions = self.correction_fn(emissions)
+
+        if self.simulate_error:
+            self.log.debug(f"Applying {self.simulate_error} to sampled emissions")
+            emissions = self.noise_fn(emissions)
+        
+        # Use function to handle 0s
+        self.log.debug(
+            "The resulting aerial emissions sample has a mean of "
+            f"{(emissions<=0).sum(axis=0).mean()} values ≤0 in each "
+            "monte-carlo iteration."
+        )
+        emissions = self.handle_zeros(emissions,self.noise_fn)
+
+        return emissions, wind_normalized_em
     
     def combine_samples(self):
         """
