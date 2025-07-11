@@ -48,8 +48,8 @@ class AerialSurveyDataTests(TestCase):
             PLUME_FILE,
             SOURCE_FILE,
             source_id_col="source_id",
-            emm_col="emissions",
-            emm_unit="kgh",
+            em_col="emissions",
+            em_unit="kgh",
             wind_norm_col="wind_norm_em",
             wind_norm_unit="kgh:mps",
             wind_speed_col="windspeed",
@@ -92,8 +92,8 @@ class AerialSurveyDataTests(TestCase):
             PLUME_FILE,
             SOURCE_FILE,
             source_id_col="source_id",
-            emm_col="emissions",
-            emm_unit="kgh",
+            em_col="emissions",
+            em_unit="kgh",
             wind_norm_col="wind_norm_em",
             wind_norm_unit="kgh:mps",
             wind_speed_col="windspeed",
@@ -109,7 +109,7 @@ class AerialSurveyDataTests(TestCase):
             len(survey.midstream_plume_emissions),1
         )
         self.assertEqual(
-            len(survey.prod_plume_emissions),2
+            len(survey.production_plume_emissions),2
         )
 
         # Create a survey not pointing at the "cutoff" column
@@ -118,8 +118,8 @@ class AerialSurveyDataTests(TestCase):
             PLUME_FILE,
             SOURCE_FILE,
             source_id_col="source_id",
-            emm_col="emissions",
-            emm_unit="kgh",
+            em_col="emissions",
+            em_unit="kgh",
             wind_norm_col="wind_norm_em",
             wind_norm_unit="kgh:mps",
             wind_speed_col="windspeed",
@@ -135,7 +135,7 @@ class AerialSurveyDataTests(TestCase):
             len(survey.midstream_plume_emissions),2
         )
         self.assertEqual(
-            len(survey.prod_plume_emissions),2
+            len(survey.production_plume_emissions),2
         )
 
     def test_common_unit_no_change(self):
@@ -148,8 +148,8 @@ class AerialSurveyDataTests(TestCase):
             PLUME_FILE,
             SOURCE_FILE,
             source_id_col="source_id",
-            emm_col="emissions",
-            emm_unit=COMMON_EMISSIONS_UNITS,
+            em_col="emissions",
+            em_unit=COMMON_EMISSIONS_UNITS,
             wind_norm_col="wind_norm_em",
             wind_norm_unit=COMMON_WIND_NORM_EM_UNITS,
             wind_speed_col="windspeed",
@@ -162,19 +162,19 @@ class AerialSurveyDataTests(TestCase):
             midstream_asset_type=("midstream",),
         )
         np.testing.assert_equal(
-            survey.prod_plume_emissions,np.array([35,48])
+            survey.production_plume_emissions,np.array([35,48])
         )
         np.testing.assert_equal(
             survey.midstream_plume_emissions,np.array([210,242])
         )
         np.testing.assert_equal(
-            survey.prod_plume_wind_norm,np.array([5,6])
+            survey.production_plume_wind_norm,np.array([5,6])
         )
         np.testing.assert_equal(
             survey.midstream_plume_wind_norm,np.array([21,22])
         )
         np.testing.assert_equal(
-            survey.prod_plume_windspeed,np.array([7,8])
+            survey.production_plume_windspeed,np.array([7,8])
         )
         np.testing.assert_equal(
             survey.midstream_plume_windspeed,np.array([10,11])
@@ -190,8 +190,8 @@ class AerialSurveyDataTests(TestCase):
             PLUME_FILE,
             SOURCE_FILE,
             source_id_col="source_id",
-            emm_col="emissions",
-            emm_unit="kg/day",
+            em_col="emissions",
+            em_unit="kg/day",
             wind_norm_col="wind_norm_em",
             wind_norm_unit=f"kg/d:{COMMON_WIND_SPEED_UNITS}",
             wind_speed_col="windspeed",
@@ -204,19 +204,19 @@ class AerialSurveyDataTests(TestCase):
             midstream_asset_type=("midstream",),
         )
         np.testing.assert_equal(
-            survey.prod_plume_emissions,np.array([35,48])/24
+            survey.production_plume_emissions,np.array([35,48])/24
         )
         np.testing.assert_equal(
             survey.midstream_plume_emissions,np.array([210,242])/24
         )
         np.testing.assert_equal(
-            survey.prod_plume_wind_norm,np.array([5,6])/24
+            survey.production_plume_wind_norm,np.array([5,6])/24
         )
         np.testing.assert_equal(
             survey.midstream_plume_wind_norm,np.array([21,22])/24
         )
         np.testing.assert_equal(
-            survey.prod_plume_windspeed,np.array([7,8])
+            survey.production_plume_windspeed,np.array([7,8])
         )
         np.testing.assert_equal(
             survey.midstream_plume_windspeed,np.array([10,11])
@@ -232,8 +232,8 @@ class AerialSurveyDataTests(TestCase):
             PLUME_FILE,
             SOURCE_FILE,
             source_id_col="source_id",
-            emm_col="emissions",
-            emm_unit="t/h",
+            em_col="emissions",
+            em_unit="t/h",
             wind_norm_col="wind_norm_em",
             wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
             wind_speed_col="windspeed",
@@ -246,19 +246,19 @@ class AerialSurveyDataTests(TestCase):
             midstream_asset_type=("midstream",),
         )
         np.testing.assert_equal(
-            survey.prod_plume_emissions,np.array([35,48]) * 1000
+            survey.production_plume_emissions,np.array([35,48]) * 1000
         )
         np.testing.assert_equal(
             survey.midstream_plume_emissions,np.array([210,242]) * 1000
         )
         np.testing.assert_equal(
-            survey.prod_plume_wind_norm,np.array([5,6]) * 1000
+            survey.production_plume_wind_norm,np.array([5,6]) * 1000
         )
         np.testing.assert_equal(
             survey.midstream_plume_wind_norm,np.array([21,22]) * 1000
         )
         np.testing.assert_equal(
-            survey.prod_plume_windspeed,np.array([7,8])
+            survey.production_plume_windspeed,np.array([7,8])
         )
         np.testing.assert_equal(
             survey.midstream_plume_windspeed,np.array([10,11])
@@ -275,8 +275,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="THIS COLUMN DOESNT EXIST",
-                emm_col="emissions",
-                emm_unit="t/h",
+                em_col="emissions",
+                em_unit="t/h",
                 wind_norm_col="wind_norm_em",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="windspeed",
@@ -294,8 +294,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col="THIS COLUMN DOESNT EXIST",
-                emm_unit="t/h",
+                em_col="THIS COLUMN DOESNT EXIST",
+                em_unit="t/h",
                 wind_norm_col="wind_norm_em",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="windspeed",
@@ -313,8 +313,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col="emissions",
-                emm_unit="t/h",
+                em_col="emissions",
+                em_unit="t/h",
                 wind_norm_col="THIS COLUMN DOESNT EXIST",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="windspeed",
@@ -332,8 +332,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col="emissions",
-                emm_unit="t/h",
+                em_col="emissions",
+                em_unit="t/h",
                 wind_norm_col="wind_norm_em",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="THIS COLUMN DOESNT EXIST",
@@ -351,8 +351,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col="emissions",
-                emm_unit="t/h",
+                em_col="emissions",
+                em_unit="t/h",
                 wind_norm_col="wind_norm_em",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="windspeed",
@@ -370,8 +370,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col="emissions",
-                emm_unit="t/h",
+                em_col="emissions",
+                em_unit="t/h",
                 wind_norm_col="wind_norm_em",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="windspeed",
@@ -389,8 +389,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col="emissions",
-                emm_unit="t/h",
+                em_col="emissions",
+                em_unit="t/h",
                 wind_norm_col="wind_norm_em",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="windspeed",
@@ -413,8 +413,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col=None,
-                emm_unit="t/h",
+                em_col=None,
+                em_unit="t/h",
                 wind_norm_col=None,
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col="windspeed",
@@ -433,8 +433,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col=None,
-                emm_unit="t/h",
+                em_col=None,
+                em_unit="t/h",
                 wind_norm_col="wind_norm_em",
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col=None,
@@ -453,8 +453,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col="emissions",
-                emm_unit="t/h",
+                em_col="emissions",
+                em_unit="t/h",
                 wind_norm_col=None,
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col=None,
@@ -473,8 +473,8 @@ class AerialSurveyDataTests(TestCase):
                 PLUME_FILE,
                 SOURCE_FILE,
                 source_id_col="source_id",
-                emm_col=None,
-                emm_unit="t/h",
+                em_col=None,
+                em_unit="t/h",
                 wind_norm_col=None,
                 wind_norm_unit=f"tons/hr:{COMMON_WIND_SPEED_UNITS}",
                 wind_speed_col=None,

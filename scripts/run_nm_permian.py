@@ -14,8 +14,13 @@ SUB_MDL_SHEETNAME = "Permian_sitelevel"
 # KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/stanford_nm_data_2021/emission_source_table.csv"
 
 # This is the permian "well" plume data ripped out of analytica, with spoofed source data that describes everything as wells
-KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/old_permian_plumedata.csv"
-KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/old_source_data.csv"
+# (i.e. only the production subset of the data Analytica was using)
+# KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/old_permian_plumedata.csv"
+# KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/old_source_data.csv"
+
+# This is all the permian data being used by Analytica described as "Kairos Permian", but ONLY the first plumes
+KAIROS_PERMIAN_PLUME_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/plumes_20250702.csv'
+KAIROS_PERMIAN_EMISSIONS_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/sources_20250702.csv'
 
 if __name__=="__main__":
     log = logging.getLogger("run_nm_permian")
@@ -44,9 +49,10 @@ if __name__=="__main__":
         wells_per_site = 1.2,
         stratify_sim_sample = True,
         n_mc_samples = 100,
-        transition_point = None,
+        prod_transition_point = None,
+        midstream_transition_point = 40, # kgh
         partial_detection_correction=True,
-        simulate_error = True,
+        simulate_error = False,
         PoD_fn = PoD_bin,
         correction_fn = power_correction,
         source_id_name = "emission_source_id",
@@ -58,6 +64,8 @@ if __name__=="__main__":
         wind_speed_col = "wind_mps",
         wind_speed_unit = "mps",
         asset_col="asset_type",
+        prod_asset_type = ("Well site",),
+        midstream_asset_type = ("Pipeline","Compressor station","Unknown","Gas processing plant"),
         coverage_count = "coverage_count",
         foldername = "evan output",
         save_mean_dist = True,

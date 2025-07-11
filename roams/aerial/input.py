@@ -142,11 +142,9 @@ class AerialSurveyData:
             correspond to what should be counted as midstream infrastructure.
             Defaults to None.
 
-        log (logging.Logger, optional):
-            A log to which log messages will be passed.
-            If None, the AerialSurveyData class will use the `logging.conf` 
-            in the repo root to create a logger object, which will log only 
-            to the console.
+        loglevel (int, optional):
+            The level to which events in this submodule should be logged.
+            Defaults to logging.INFO.
     """
     def __init__(
         self,
@@ -422,7 +420,7 @@ class AerialSurveyData:
         )
     
     @property
-    def prod_plume_emissions(self) -> np.ndarray:
+    def production_plume_emissions(self) -> np.ndarray:
         # Always return emissions in COMMON_EMISSIONS_UNITS
 
         # If the emissions column was given, then just return that value
@@ -435,7 +433,7 @@ class AerialSurveyData:
             )
         
         # Otherwise compute using the remaining quantities
-        return (self.prod_plume_wind_norm * self.prod_plume_windspeed)
+        return (self.production_plume_wind_norm * self.production_plume_windspeed)
     
     @property
     def midstream_plume_emissions(self) -> np.ndarray:
@@ -454,7 +452,7 @@ class AerialSurveyData:
         return self.midstream_plume_wind_norm * self.midstream_plume_windspeed
     
     @property
-    def prod_plume_wind_norm(self) -> np.ndarray:
+    def production_plume_wind_norm(self) -> np.ndarray:
         # Wind normalized emissions to always be returned in COMMON_WIND_NORM_EM_UNITS
         
         # If the wind-normalized emissions column is given, just return the converted
@@ -481,7 +479,7 @@ class AerialSurveyData:
             return convert_units(output,target_denom,denom)
 
         # Otherwise compute using the remaining quantities
-        return self.prod_plume_emissions/self.prod_plume_windspeed
+        return self.production_plume_emissions/self.production_plume_windspeed
     
     @property
     def midstream_plume_wind_norm(self) -> np.ndarray:
@@ -514,7 +512,7 @@ class AerialSurveyData:
         return self.midstream_plume_emissions/self.midstream_plume_windspeed
     
     @property
-    def prod_plume_windspeed(self) -> np.ndarray:
+    def production_plume_windspeed(self) -> np.ndarray:
         # Wind normalized emissions to always be returned in COMMON_WIND_SPEED_UNITS
         
         # If the wind speed col is given, just return the converted version of that column
@@ -526,7 +524,7 @@ class AerialSurveyData:
             )
 
         # Otherwise compute using the remaining quantities
-        return self.prod_plume_emissions/self.prod_plume_wind_norm
+        return self.production_plume_emissions/self.production_plume_wind_norm
     
     @property
     def midstream_plume_windspeed(self) -> np.ndarray:
