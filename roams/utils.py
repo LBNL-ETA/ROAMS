@@ -1,4 +1,6 @@
-from roams.conversions import MPS_TO_MPH
+# 1 meter per second = 2.23694 miles per hour
+MPS_TO_MPH = 2.23694
+M3_TO_CUFT = 35.3147
 
 # A dictionary of unit : conversion to kg/h, where each dictionary value 
 # represents the amount of that unit in one kg/h. The unit of tons here is 
@@ -32,10 +34,18 @@ WINDSPEED_CONVERSIONS = {
 }
 
 # A dictionary of unit : conversion to mscf/day, where each dictionary value 
-# represents the amount of that unit in mscf/day.
+# represents its conversion to mscf/d (e.g. 1 mscf/d is how many of X)
 PRODUCTION_CONVERSIONS = {
-    "mscf/day"   : 1,
-    "mscf/d"   : 1,
+    "mscf/day"  : 1,
+    "mscf/d"    : 1,
+    "mscf/h"    : 1/24,
+    "mscf/hr"   : 1/24,
+    "scf/d"     : 1e3,
+    "scf/h"     : 1e3/24,
+    "m3/hr"     : 1e3/M3_TO_CUFT/24,
+    "m3/h"      : 1e3/M3_TO_CUFT/24,
+    "m3/day"    : 1e3/M3_TO_CUFT,
+    "m3/d"      : 1e3/M3_TO_CUFT,
 }
 
 def convert_units(value,unit_in : str,unit_out: str):

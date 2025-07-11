@@ -85,7 +85,7 @@ class SimulatedProductionAssetData:
         
         if production_col not in self._raw_sim_data.columns and production_col is not None:
             raise KeyError(
-                f"{self.production_col = } is not in the simulated results "
+                f"{production_col = } is not in the simulated results "
                 "table. The only columns available are: "
                 f"`{'`, `'.join(self._raw_sim_data.columns)}`."
             )
