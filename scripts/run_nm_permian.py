@@ -5,9 +5,8 @@ from roams.aerial.partial_detection import PoD_bin
 from roams.aerial.assumptions import power_correction
 
 COVERED_PRODUCTIVITY_FILE = "/Users/eneill/repos/ROAMS/data/production/Covered_gas_prod_percentiles_all_basins_by_well_Kairos_NM_Permian20221021.csv"
-SUB_MDL_FILENAME = "/Users/eneill/repos/ROAMS/data/Rutherford_million_samples_PERMIAN_20220917.xlsx" # <- Used in Analytica
+SUB_MDL_FILENAME = "/Users/eneill/repos/ROAMS/data/Rutherford_million_samples_PERMIAN_20220917.csv" # <- Used in Analytica
 # SUB_MDL_FILENAME = "/Users/eneill/repos/ROAMS/data/Stanford_Modeling_Results_20220822.xlsx" # <- Used by Ross
-SUB_MDL_SHEETNAME = "Permian_sitelevel"
 
 # This is the permian plume/source data Ross was using, which is maybe more recent than Analytica
 # KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/stanford_nm_data_2021/plume_table.csv"
@@ -40,7 +39,6 @@ if __name__=="__main__":
 
     r = ROAMSModel(
         simmed_emission_file = SUB_MDL_FILENAME,
-        simmed_emission_sheet = SUB_MDL_SHEETNAME,
         plume_file = KAIROS_PERMIAN_PLUME_FILENAME, 
         source_file = KAIROS_PERMIAN_EMISSIONS_FILENAME,
         covered_productivity_file = COVERED_PRODUCTIVITY_FILE,
@@ -55,10 +53,14 @@ if __name__=="__main__":
         simulate_error = False,
         PoD_fn = PoD_bin,
         correction_fn = power_correction,
+        sim_em_col = "Site emissions [kg/d]",
+        sim_em_unit = "kg/d",
+        sim_prod_col = "Gas productivity [mscf/site/day]",
+        sim_prod_unit = "mscf/day",
         source_id_name = "emission_source_id",
         cutoff_col = None,
-        em_col = None,
-        em_unit = None,
+        aerial_em_col = None,
+        aerial_em_unit = None,
         wind_norm_col = "wind_independent_emission_rate_kghmps",
         wind_norm_unit = "kgh:mps",
         wind_speed_col = "wind_mps",

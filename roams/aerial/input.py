@@ -250,12 +250,6 @@ class AerialSurveyData:
         self.log.debug(f"Emissions column '{self._em_col}' has units of '{self._data_em_unit}'")
         self.log.debug(f"Wind-normalized emissions column '{self._wind_norm_col}' has units of '{self._data_wind_norm_unit}'")
         self.log.debug(f"Wind speed column '{self._wind_speed_col}' has units of '{self._data_wind_speed_unit}'")
-
-        # These attributes will define the output units of the properties
-        # that are intended to be used to interact with the aerial survey data
-        self.windspeed_units = COMMON_WIND_SPEED_UNITS
-        self.emissions_units = COMMON_EMISSIONS_UNITS
-        self.wind_norm_emissions_units = COMMON_WIND_NORM_EM_UNITS
         
         # Read the source data
         self.log.info(f"Reading source data from {source_file}")
@@ -429,7 +423,7 @@ class AerialSurveyData:
             return convert_units(
                 self.production_plumes[self._em_col].values,
                 self._data_em_unit,
-                self.emissions_units
+                COMMON_EMISSIONS_UNITS
             )
         
         # Otherwise compute using the remaining quantities
@@ -445,7 +439,7 @@ class AerialSurveyData:
             return convert_units(
                 self.midstream_plumes[self._em_col].values,
                 self._data_em_unit,
-                self.emissions_units
+                COMMON_EMISSIONS_UNITS
             )
 
         # Otherwise compute using the remaining quantities
@@ -463,7 +457,7 @@ class AerialSurveyData:
             numer, denom = self._data_wind_norm_unit.lower().split(":")
             
             # E.g. target_numer, target_denom = "kgh", "mps"
-            target_numer, target_denom = self.wind_norm_emissions_units.lower().split(":")
+            target_numer, target_denom = COMMON_WIND_NORM_EM_UNITS.lower().split(":")
 
             # Interim output in converted numerator units
             # E.g. "kgh / mph"
@@ -493,7 +487,7 @@ class AerialSurveyData:
             numer, denom = self._data_wind_norm_unit.lower().split(":")
             
             # E.g. target_numer, target_denom = "kgh", "mps"
-            target_numer, target_denom = self.wind_norm_emissions_units.lower().split(":")
+            target_numer, target_denom = COMMON_WIND_NORM_EM_UNITS.lower().split(":")
 
             # Interim output in converted numerator units
             # E.g. "kgh / mph"
@@ -520,7 +514,7 @@ class AerialSurveyData:
             return convert_units(
                 self.production_plumes[self._wind_speed_col].values,
                 self._data_wind_speed_unit,
-                self.windspeed_units
+                COMMON_WIND_SPEED_UNITS
             )
 
         # Otherwise compute using the remaining quantities
@@ -535,7 +529,7 @@ class AerialSurveyData:
             return convert_units(
                 self.midstream_plumes[self._wind_speed_col].values,
                 self._data_wind_speed_unit,
-                self.windspeed_units
+                COMMON_WIND_SPEED_UNITS
             )
 
         # Otherwise compute using the remaining quantities

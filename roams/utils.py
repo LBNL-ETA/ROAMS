@@ -31,6 +31,13 @@ WINDSPEED_CONVERSIONS = {
     "mi/h"  : MPS_TO_MPH,
 }
 
+# A dictionary of unit : conversion to mscf/day, where each dictionary value 
+# represents the amount of that unit in mscf/day.
+PRODUCTION_CONVERSIONS = {
+    "mscf/day"   : 1,
+    "mscf/d"   : 1,
+}
+
 def convert_units(value,unit_in : str,unit_out: str):
     """
     Attempt to convert the given value from `unit_in` into `unit_out`, assuming 
@@ -69,6 +76,9 @@ def convert_units(value,unit_in : str,unit_out: str):
     
     if unit_in in WINDSPEED_CONVERSIONS.keys() and unit_out in WINDSPEED_CONVERSIONS.keys():
         return value * WINDSPEED_CONVERSIONS[unit_out]/WINDSPEED_CONVERSIONS[unit_in]
+    
+    if unit_in in PRODUCTION_CONVERSIONS.keys() and unit_out in PRODUCTION_CONVERSIONS.keys():
+        return value * PRODUCTION_CONVERSIONS[unit_out]/PRODUCTION_CONVERSIONS[unit_in]
 
     raise KeyError(
         f"One of {unit_in = } or {unit_out = } are not in the conversion "

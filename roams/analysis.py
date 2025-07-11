@@ -8,11 +8,16 @@ from matplotlib import pyplot as plt
 
 from roams.conf import RESULT_DIR
 
+from roams.constants import COMMON_EMISSIONS_UNITS
+
 from roams.aerial.assumptions import power_correction, normal, zero_out
 from roams.aerial.input import AerialSurveyData
 from roams.aerial.partial_detection import PoD_bin, PoD_linear
-from roams.transition_point import find_transition_point
+
 from roams.simulated.stratify import stratify_sample
+from roams.simulated.input import SimulatedProductionAssetData
+
+from roams.transition_point import find_transition_point
 
 class ROAMSModel:
     """
@@ -47,14 +52,10 @@ class ROAMSModel:
     Args:
         
         simmed_emission_file (str): 
-            An excel file with the simulated emissions distribution in 
-            tabular form in one of the sheets. In addition, the table should 
-            have simulated productivity associated to each simulated 
-            observation.
-        
-        simmed_emission_sheet (str): 
-            The name of the sheet in `simmed_emission_file` with simulated 
-            emissions and productivity.
+            A csv file with the simulated emissions distribution in tabular 
+            form. The table should also have simulated productivity associated 
+            to each simulated observation, which is used in the process of 
+            simulated emissions stratification.
         
         plume_file (str): 
             The file path to the reported plume-level emissions. It's required 
@@ -71,16 +72,6 @@ class ROAMSModel:
             productivity, which will be used to re-weight the simulated 
             data according to the "actual" productivity of the region (this 
             process is called 'stratification' in the code).
-        
-        campaign_name (str, optional): 
-            A string descriptor of the campaign name that will be used to 
-            look up meta-information about the campaign like the total number 
-            of wells, and the average number of wells per site. It will also 
-            be used in the outputs to help identify the source of the aerial 
-            data.
-            If None, the code will break and not be able to compute all the 
-            outputs.
-            Defaults to None.
         
         stratify_sim_sample (bool, optional): 
             Whether or not the simulated emissions should be stratified to 
@@ -175,6 +166,29 @@ class ROAMSModel:
             deterministic correction to account for macroscopic average 
             measurement bias.
             Defaults to power_correction.
+
+        sim_em_col (str, optional): 
+            The name of the column in `simulated_results` that holds the 
+            estimates of emissions from a well in the covered study region.
+            This is required for the ROAMSModel to operate.
+            Defaults to None.
+
+        sim_em_unit (str, optional): 
+            The units of the emissions rate described in `emissions_col`.
+            This is required for the ROAMSModel to opearate.
+            E.g. "kgh".
+
+        sim_prod_col (str, optional): 
+            The name of the column in `simulated_results` that holds the 
+            estimates of production from a well in the covered study region.
+            If not specified, the code will later break if this ends up 
+            being required for stratification or any other analysis.
+            Defaults to None.
+        
+        sim_prod_unit (str, optional): 
+            The units of production described in `production_col`.
+            E.g. "mscf/day".
+            Defaults to None.
         
         source_id_name (str, optional):
             The column name in both `plume_file` and `source_file` that 
@@ -183,14 +197,14 @@ class ROAMSModel:
             The code will raise an error if not specified.
             Defaults to None.
         
-        em_col (str, optional): 
+        aerial_em_col (str, optional): 
             The name of the column in the `plume_file` plume emissions table 
             that describes the emissions rate.
             If None, you MUST be specifying wind-normalized emissions rate 
             and wind-speed to be able to infer this.
             Defaults to None.
         
-        em_unit (str, optional): 
+        aerial_em_unit (str, optional): 
             The physical unit of emissions rate, if the corresponding column 
             in the plume file (`emm_col`) has been specified.
             E.g. "kgh".
@@ -265,7 +279,6 @@ class ROAMSModel:
     def __init__(
         self,
         simmed_emission_file,
-        simmed_emission_sheet,
         plume_file, 
         source_file,
         covered_productivity_file,
@@ -282,9 +295,13 @@ class ROAMSModel:
         simulate_error = True,
         PoD_fn = PoD_bin,
         correction_fn = power_correction,
+        sim_em_col = None,
+        sim_em_unit = None,
+        sim_prod_col = None,
+        sim_prod_unit = None,
         source_id_name = None,
-        em_col = None,
-        em_unit = None,
+        aerial_em_col = None,
+        aerial_em_unit = None,
         wind_norm_col = None,
         wind_norm_unit = None,
         wind_speed_col = None,
@@ -315,7 +332,6 @@ class ROAMSModel:
 
         # The simulation emissions & production input file
         self.simmed_emission_file = simmed_emission_file
-        self.simmed_emission_sheet = simmed_emission_sheet
 
         # Estimate of covered production in survey region
         self.covered_productivity_file = covered_productivity_file
@@ -324,8 +340,8 @@ class ROAMSModel:
         self.plume_file = plume_file
         self.source_file = source_file
         self.source_id_name = source_id_name
-        self.em_col = em_col
-        self.em_unit = em_unit
+        self.aerial_em_col = aerial_em_col
+        self.aerial_em_unit = aerial_em_unit
         self.wind_norm_col = wind_norm_col
         self.wind_norm_unit = wind_norm_unit
         self.wind_speed_col = wind_speed_col
@@ -335,6 +351,12 @@ class ROAMSModel:
         self.asset_col = asset_col
         self.prod_asset_type = prod_asset_type
         self.midstream_asset_type = midstream_asset_type
+
+        # Specification of simulated emissions + production input data
+        self.sim_em_col = sim_em_col
+        self.sim_em_unit = sim_em_unit
+        self.sim_prod_col = sim_prod_col
+        self.sim_prod_unit = sim_prod_unit
         
         # Specifications of algorithm behavior
         self.stratify_sim_sample = stratify_sim_sample
@@ -342,6 +364,7 @@ class ROAMSModel:
         self.noise_fn = noise_fn
         self.handle_zeros = handle_zeros
         self.prod_transition_point = prod_transition_point
+        self.midstream_transition_point = midstream_transition_point
         self.partial_detection_correction = partial_detection_correction
         self.simulate_error = simulate_error
         self.PoD_fn = PoD_fn
@@ -403,7 +426,7 @@ class ROAMSModel:
         self.read_simulated_data()
         self.read_aerial_data()
 
-    def read_simulated_data(self):
+    def read_simulated_data(self, simdataclass : SimulatedProductionAssetData = SimulatedProductionAssetData):
         """
         Return a numpy array of simulated emissions values. By default, this 
         assumes a specific column name and implicit unit.
@@ -412,17 +435,14 @@ class ROAMSModel:
             tuple[np.ndarray]:
                 A tuple of (simulated emissions, simulated productivity)
         """
-        self.log.info(
-            f"Reading simulated data from {self.simmed_emission_file = }"
-        )
-        sub_mdl_sims = pd.read_excel(
+        self.prod_sim_results = simdataclass(
             self.simmed_emission_file,
-            sheet_name=self.simmed_emission_sheet
+            emissions_col = self.sim_em_col,
+            emissions_units = self.sim_em_unit,
+            production_col = self.sim_prod_col,
+            production_units = self.sim_prod_unit,
+            loglevel = self.loglevel
         )
-        sub_mdl_prod = sub_mdl_sims["Gas productivity [mscf/site/day]"].values
-        sub_mdl_em = (sub_mdl_sims["sum of emissions [kg/hr]"] / 24).values
-        
-        self.simulated_em, self.simulated_prod = sub_mdl_em, sub_mdl_prod
     
     def read_aerial_data(self,surveyClass : AerialSurveyData = AerialSurveyData):
         """
@@ -439,8 +459,8 @@ class ROAMSModel:
             self.plume_file,
             self.source_file,
             self.source_id_name,
-            em_col = self.em_col,
-            em_unit = self.em_unit,
+            em_col = self.aerial_em_col,
+            em_unit = self.aerial_em_unit,
             wind_norm_col = self.wind_norm_col,
             wind_norm_unit = self.wind_norm_unit,
             wind_speed_col = self.wind_speed_col,
@@ -519,8 +539,8 @@ class ROAMSModel:
                 )
             covered_productivity = self.read_covered_productivity()
             sub_mdl_dist = stratify_sample(
-                self.simulated_em,
-                self.simulated_prod,
+                self.prod_sim_results.simulated_emissions,
+                self.prod_sim_results.simulated_production,
                 covered_productivity,
                 n_infra=self.num_wells_to_simulate
             )
@@ -567,7 +587,7 @@ class ROAMSModel:
         self.log.debug(
             "The mean total midstream aerial sample emissions are "
             f"{mid_aerial_site_sample.sum(axis=0).mean():.2f} "
-            f"{self.survey.emissions_units}"
+            f"{COMMON_EMISSIONS_UNITS}"
         )
         
         # Define an addition to the cumulative sum based on the wind-normalized
@@ -617,7 +637,7 @@ class ROAMSModel:
         self.log.debug(
             "The mean total aerial production sample emissions are "
             f"{prod_aerial_em_sample.sum(axis=0).mean():.2f} "
-            f"{self.survey.emissions_units}"
+            f"{COMMON_EMISSIONS_UNITS}"
         )
 
         # Number of required extra rows to simulate all covered wells
@@ -984,9 +1004,9 @@ class ROAMSModel:
         # combined production emissions distribution.
         prod_summary = pd.DataFrame(
             index=[
-                f"Aerial Only Total CH4 emissions (thousand {self.survey.emissions_units})",
-                f"Partial Detection Total CH4 emissions (thousand {self.survey.emissions_units})",
-                f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {self.survey.emissions_units})",
+                f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
                 "Simulated Total CH4 emissions (t/h)", 
                 "Overall Combined Total Production CH4 emissions (t/h)",
                 "Transition Point (kg/h)"
@@ -998,23 +1018,23 @@ class ROAMSModel:
         
         # Report the sampled aerial emissions distribution, regardless of transition point
         sum_emiss_aerial = self.prod_tot_aerial_sample.sum(axis=0)/1e3
-        prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {self.survey.emissions_units})","By Itself"] = self.mean_and_quantiles(sum_emiss_aerial)[quantity_cols].values
+        prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_aerial)[quantity_cols].values
 
         # Report sampled aerial emissions distributions above transition point
         sum_emiss_aerial_abovetp = np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(self.n_mc_samples)])/1e3
-        prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {self.survey.emissions_units})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aerial_abovetp)[quantity_cols].values
+        prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aerial_abovetp)[quantity_cols].values
 
         # In this addition, the expectation is the only one or other is contributing to the sum
         sum_emiss_partial = self.prod_partial_detection_emissions.sum(axis=0)/1e3
-        prod_summary.loc[f"Partial Detection Total CH4 emissions (thousand {self.survey.emissions_units})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_partial)[quantity_cols].values
+        prod_summary.loc[f"Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_partial)[quantity_cols].values
         
         # Like above, in this addition there are either additional copies of sampled emissions in `total_aerial_sample`, or the total missing emissions are included in `extra_emissions_for_cdf`.
         sum_emiss_aer_comb = (self.prod_tot_aerial_sample.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0))/1e3
-        prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {self.survey.emissions_units})","By Itself"] = self.mean_and_quantiles(sum_emiss_aer_comb)[quantity_cols].values
+        prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_aer_comb)[quantity_cols].values
 
         # This will be aerial+partial detection, but ONLY total contributions above each transition point
         sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + np.array([self.prod_partial_detection_emissions[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(self.n_mc_samples)])/1e3
-        prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {self.survey.emissions_units})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aer_comb_abovetp)[quantity_cols].values
+        prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aer_comb_abovetp)[quantity_cols].values
         
         # The total amount of simulated emissions
         sum_emiss_sim = self.simulated_sample.sum(axis=0)/1e3

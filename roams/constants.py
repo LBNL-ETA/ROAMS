@@ -2,8 +2,11 @@
 # functions require as input.
 COMMON_WIND_NORM_EM_UNITS = "kgh:mps"
 
-# The numerate of the common wind-normalized emissions unit
+# The numerator of the common wind-normalized emissions unit
 COMMON_EMISSIONS_UNITS = COMMON_WIND_NORM_EM_UNITS.split(":")[0]
 
-# A somewhat arbitrary choice of common wind speed units to maintain
+# A denominator of the common wind-normalized emissions unit
 COMMON_WIND_SPEED_UNITS = COMMON_WIND_NORM_EM_UNITS.split(":")[1]
+
+# A choice of 1000 standard cubic feet per day for production rate
+COMMON_PRODUCTION_UNITS = "mscf/day"
