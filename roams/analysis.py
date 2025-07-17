@@ -1,5 +1,7 @@
+from collections.abc import Callable
 import os
 import logging
+import datetime
 
 import pandas as pd
 import numpy as np
@@ -8,7 +10,7 @@ from matplotlib import pyplot as plt
 
 from roams.conf import RESULT_DIR
 
-from roams.constants import COMMON_EMISSIONS_UNITS
+from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS, ALVAREZ_ET_AL_CH4_FRAC
 
 from roams.aerial.assumptions import power_correction, normal, zero_out
 from roams.aerial.input import AerialSurveyData
@@ -17,7 +19,10 @@ from roams.aerial.partial_detection import PoD_bin, PoD_linear
 from roams.simulated.stratify import stratify_sample
 from roams.simulated.input import SimulatedProductionAssetData
 
+from roams.production.input import CoveredProductionData
+
 from roams.transition_point import find_transition_point
+from roams.utils import convert_units
 
 class ROAMSModel:
     """
@@ -67,11 +72,38 @@ class ROAMSModel:
             identifier with `plume_file`, and should also contain a descriptor 
             of the asset that best represents the source.
         
-        covered_productivity_file (str): 
-            The name of a file with an estimated distribution of regional 
-            productivity, which will be used to re-weight the simulated 
-            data according to the "actual" productivity of the region (this 
-            process is called 'stratification' in the code).
+        covered_productivity_file (str, optional): 
+            The name of a file with an estimated distribution of productivity 
+            in the covered region, which will be used to re-weight the 
+            simulated data according to the "actual" productivity of the 
+            region (this process is called 'stratification' in the code).
+            It is also used to define fractional loss (i.e. leaked methane 
+            divided by the volume of all methane produced).
+            If not given, the code can't stratify the simulated sample, and 
+            won't be able to compute fractional volumetric loss as part of 
+            the outputs.
+            Defaults to None
+        
+        covered_productivity_col (str, optional): 
+            The name of the column in the table given by 
+            `covered_productivity_file` that holds the estimated per-site 
+            production in the covered region.
+            If not given when the file is given, an error will be raised.
+            Defaults to None.
+        
+        covered_productivity_unit (str, optional): 
+            The unit of `covered_productivity_col` in the table given by 
+            `covered_productivity_file` that holds the estimated per-site 
+            production in the covered region.
+            If not given when the file is given, an error will be raised.
+            Defaults to None.
+
+        frac_production_ch4 (float, optional):
+            The fraction of produced natural gas (reported in covered 
+            productivity) that is CH4.
+            Used in the definition of fractional loss when that's being 
+            calculated.
+            Defaults to ALVAREZ_ET_AL_CH4_FRAC.
         
         stratify_sim_sample (bool, optional): 
             Whether or not the simulated emissions should be stratified to 
@@ -278,48 +310,50 @@ class ROAMSModel:
     """
     def __init__(
         self,
-        simmed_emission_file,
-        plume_file, 
-        source_file,
-        covered_productivity_file,
-        stratify_sim_sample = True,
-        n_mc_samples = 100,
-        num_wells_to_simulate = None,
-        well_visit_count = None,
-        wells_per_site = None,
-        noise_fn = normal,
-        handle_zeros = zero_out,
-        prod_transition_point = None,
-        midstream_transition_point = None,
-        partial_detection_correction = True,
-        simulate_error = True,
-        PoD_fn = PoD_bin,
-        correction_fn = power_correction,
-        sim_em_col = None,
-        sim_em_unit = None,
-        sim_prod_col = None,
-        sim_prod_unit = None,
-        source_id_name = None,
-        aerial_em_col = None,
-        aerial_em_unit = None,
-        wind_norm_col = None,
-        wind_norm_unit = None,
-        wind_speed_col = None,
-        wind_speed_unit = None,
-        cutoff_col = None,
-        coverage_count = None,
-        asset_col = None,
-        prod_asset_type = None,
-        midstream_asset_type = None,
-        foldername=None,
-        save_mean_dist = True,
-        loglevel=logging.INFO,
+        simmed_emission_file : str,
+        plume_file : str, 
+        source_file : str,
+        covered_productivity_file : str = None,
+        covered_productivity_col : str = None,
+        covered_productivity_unit : str = None,
+        frac_production_ch4 : float = ALVAREZ_ET_AL_CH4_FRAC,
+        stratify_sim_sample : bool = True,
+        n_mc_samples : int = 100,
+        num_wells_to_simulate : int = None,
+        well_visit_count : int = None,
+        wells_per_site : float = None,
+        noise_fn : Callable[[np.ndarray],np.ndarray] = normal,
+        handle_zeros : Callable[[np.ndarray],np.ndarray] = zero_out,
+        prod_transition_point : float = None,
+        midstream_transition_point : float = None,
+        partial_detection_correction : bool = True,
+        simulate_error : bool = True,
+        PoD_fn : Callable[[np.ndarray],np.ndarray] = PoD_bin,
+        correction_fn : Callable[[np.ndarray],np.ndarray] = power_correction,
+        sim_em_col : str = None,
+        sim_em_unit : str = None,
+        sim_prod_col : str = None,
+        sim_prod_unit : str = None,
+        source_id_name : str = None,
+        aerial_em_col : str = None,
+        aerial_em_unit : str = None,
+        wind_norm_col : str = None,
+        wind_norm_unit : str = None,
+        wind_speed_col : str = None,
+        wind_speed_unit : str = None,
+        cutoff_col : str = None,
+        coverage_count : str = None,
+        asset_col : str = None,
+        prod_asset_type : tuple = None,
+        midstream_asset_type : tuple = None,
+        foldername : str=None,
+        save_mean_dist : bool = True,
+        loglevel : int =logging.INFO,
         ):
         # If result folder name not specified, use a timestamp.
         if foldername is None:
-            import datetime
             # E.g. foldername = "1 Jan 2000 01-23-45"
-            foldername = datetime.now().strftime("%d %b %Y %H%M%S")
+            foldername = datetime.now().strftime("%d %b %Y %H-%M-%S")
         
         # self.outfolder is a directory into which result tables will be 
         # written.
@@ -333,8 +367,16 @@ class ROAMSModel:
         # The simulation emissions & production input file
         self.simmed_emission_file = simmed_emission_file
 
-        # Estimate of covered production in survey region
-        self.covered_productivity_file = covered_productivity_file
+        # Estimate of covered production in survey region (can be None)
+        self.covered_productivity = None
+        if covered_productivity_file is not None:
+            self.covered_productivity = CoveredProductionData(
+                covered_production_file = covered_productivity_file,
+                covered_production_col = covered_productivity_col,
+                covered_production_unit = covered_productivity_unit,
+                frac_production_ch4 = frac_production_ch4,
+                loglevel = self.loglevel,
+            )
         
         # Specification of aerial input data
         self.plume_file = plume_file
@@ -474,22 +516,6 @@ class ROAMSModel:
             loglevel=self.loglevel,
         )
     
-    def read_covered_productivity(self) -> np.ndarray:
-        """
-        Read the file containing the covered productivity (supposed to be 
-        a file just containing a list of estimated production values for all 
-        covered production assets.).
-
-        Returns:
-            np.ndarray: 
-                A 1-d array of estimated gas production. 
-        """
-        self.log.info(
-            f"Reading covered productivity from {self.covered_productivity_file}"
-        )
-        covered_productivity = pd.read_csv(self.covered_productivity_file)
-        return covered_productivity["New Mexico Permian 2021 (mscf/site/day)"].values
-    
     def make_samples(self):
         """
         Call methods that will make the sample of simulated production 
@@ -532,20 +558,14 @@ class ROAMSModel:
                 table of values. Each value is a simulated emissions value.
         """        
         if self.stratify_sim_sample:
-            if self.covered_productivity_file is None:
-                raise ValueError(
-                    "`stratify_sim_sample` is True, but there is no "
-                    "productivity file specified to use for the stratification."
-                )
-            covered_productivity = self.read_covered_productivity()
             sub_mdl_dist = stratify_sample(
                 self.prod_sim_results.simulated_emissions,
                 self.prod_sim_results.simulated_production,
-                covered_productivity,
+                self.covered_productivity.ng_production_volumetric,
                 n_infra=self.num_wells_to_simulate
             )
         else:
-            sub_mdl_dist = self.simulated_em
+            sub_mdl_dist = self.prod_sim_results.simulated_emissions
 
         # Sample the stratified representation for each monte carlo iteration
         self.log.info(
@@ -828,11 +848,11 @@ class ROAMSModel:
         and sampled simulated emissions. By the time of calling this method, 
         these should be in the form of:
             
-            * `self.tot_aerial_sample` : 
+            * `self.prod_tot_aerial_sample` : 
                 A (self.num_wells_to_simulate)x(self.n_mc_samples) table of 
                 sampled, corrected, and perhaps noised aerial observations,
                 where intermittency has also been taken into account.
-            * `self.extra_emissions_for_cdf` : 
+            * `self.prod_partial_detection_emissions` : 
                 A (self.num_wells_to_simulate)x(self.n_mc_samples) table of 
                 estimated extra emissions from the entire basin under study, 
                 intended to reflect the "missed" emissions from the partial 
@@ -974,29 +994,53 @@ class ROAMSModel:
         """
         Call methods to add tabular (pd.DataFrame) outputs to self.table_outputs.
         """
-        # Add summary tables of production distributions 
-        self.make_production_summary_tables()
+        self.log.info("Creating the production summary tables")
+        # Add a summary table of key results from component distributions
+        self.make_key_results()
+        
+        # Add summary table of production distribution
+        self.make_prod_distr_summary()
+
+        # If covered_productivity exists, summarize fractional loss
+        if self.covered_productivity is not None:
+            self.make_fractional_loss()
 
         if self.save_mean_dist:
-            # Add summary of production distributions
-            self.make_mean_production_dist_tables()
+            # Add summary of production distributions (larger table)
+            self.make_mean_production_cumdist_tables()
 
-    def make_production_summary_tables(self):
+    def make_fractional_loss(self):
         """
-        Make two separate tables to summarize the production emissions 
-        distributions (both component distributions and the combined one).
+        Make a small new table to summarize production and fractional loss.
+        """
+        result = pd.DataFrame({
+            f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})" : [np.nan],
+            f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})" : [np.nan],
+            f"Mean fractional CH4 Loss ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)":[np.nan]
+        })
 
-        One output just summarizes the total emissions contributions from 
+        # Fill with a single value: total covered volumetric productivity of CH4
+        result[f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})"] = self.covered_productivity.ch4_production_volumetric.sum()
+        result[f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})"] = self.covered_productivity.ch4_production_mass.sum()
+        
+        # Volumetric fractional loss = [combined distribution total emissions rate] / [covered productivity production rate]
+        result[f"Mean fractional CH4 Loss ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)"] = (
+            (
+                self.combined_samples.sum(axis=0).mean() 
+                + self.prod_partial_detection_emissions.sum(axis=0).mean()
+            )
+            /self.covered_productivity.ch4_production_mass.sum()
+        )
+
+        self.table_outputs["Fractional Loss Summary"] = result
+    
+    def make_key_results(self):
+        """
+        This tabular output summarizes the total emissions contributions from 
         each component distribution, and in total. To the extent possible, the 
         contribution of each is measured both before and after accounting 
         for the transition point.
-
-        The other output tries to characterize the resulting combined 
-        cumulative emissions distribution by finding some key points of 
-        interest, like what the kg/h values are at certain percentages, and
-        what the percentage values are at certain kg/h values.
         """
-        self.log.info("Creating the production summary tables")
         # E.g. quantity_cols = ["Avg","2.5% CI","97.5% CI"]
         quantity_cols = ["Avg",*[str(100*q)+"% CI" for q in self._quantiles]]
 
@@ -1007,9 +1051,12 @@ class ROAMSModel:
                 f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
                 f"Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
                 f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
-                "Simulated Total CH4 emissions (t/h)", 
-                "Overall Combined Total Production CH4 emissions (t/h)",
-                "Transition Point (kg/h)"
+                f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})", 
+                f"Overall Combined Total Production CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Transition Point ({COMMON_EMISSIONS_UNITS})",
+                f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})",
+                f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})",
+                f"Fractional CH4 Loss ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)",
             ],
             columns=pd.MultiIndex.from_product(
                 [["By Itself","Accounting for Transition Point"],quantity_cols],
@@ -1038,25 +1085,31 @@ class ROAMSModel:
         
         # The total amount of simulated emissions
         sum_emiss_sim = self.simulated_sample.sum(axis=0)/1e3
-        prod_summary.loc["Simulated Total CH4 emissions (t/h)","By Itself"] = self.mean_and_quantiles(sum_emiss_sim)[quantity_cols].values
+        prod_summary.loc[f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_sim)[quantity_cols].values
 
         # The total amount of simulated emissions below transition point, that end up being coounted in the resulting distribution.
         sum_emiss_sim_belowtp = np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(self.n_mc_samples)])/1e3
-        prod_summary.loc["Simulated Total CH4 emissions (t/h)","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_sim_belowtp)[quantity_cols].values
+        prod_summary.loc[f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_sim_belowtp)[quantity_cols].values
         
         # Report from total combined distribution: only "By Itself" (doesn't make sense to 'account for transition point' in combined distribution)
         sum_emiss_all_comb = (self.combined_samples.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0))/1e3
-        prod_summary.loc["Overall Combined Total Production CH4 emissions (t/h)","By Itself"] = self.mean_and_quantiles(sum_emiss_all_comb)[quantity_cols].values
+        prod_summary.loc[f"Overall Combined Total Production CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_all_comb)[quantity_cols].values
 
         # Report the same quantities for the transition point.
-        prod_summary.loc["Transition Point (kg/h)","By Itself"] = self.mean_and_quantiles(self.prod_tp)[quantity_cols].values
+        prod_summary.loc[f"Transition Point ({COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(self.prod_tp)[quantity_cols].values
+        
+        # Put the resulting table into self.table_outputs
+        self.table_outputs["Production Summary"] = prod_summary
+    
+    def make_prod_distr_summary(self):
+        """
+        Make an output that tries to characterize the resulting combined 
+        cumulative emissions distribution of production emissions by finding 
+        some key points of interest, like what the kg/h values are at certain 
+        percentiles, and what the percentile values are at certain kg/h values.
 
-        #### Next, try to characterize the resulting combined distribution by 
-        #### identifying some key intercepts:
-        ####    * What are the kgh values of the first 10%, 50%, 90%, 100% of emissions?
-        ####    * What are the percentages of emissions above 10, 100, 1000 kgh?
-        ####    
-        #### All these answers are put into the same table and sorted.
+        One column will be "Emissions Value"
+        """
         cumsum_y = self.combined_samples.cumsum(axis=0) + self.prod_partial_detection_emissions.cumsum(axis=0)
         cumsum_y = 100*(1-cumsum_y/cumsum_y.max(axis=0)).mean(axis=1)
         dist_x = self.combined_samples.mean(axis=1)
@@ -1081,7 +1134,7 @@ class ROAMSModel:
         # at least 1000 kgh
         thousand_kgh = np.argmin(dist_x<1000)
 
-        dist_summary["Emissions Value"] = [
+        dist_summary[f"Emissions Value ({COMMON_EMISSIONS_UNITS})"] = [
             dist_x[ten_kgh],
             dist_x[hundred_kgh],
             dist_x[thousand_kgh],
@@ -1100,9 +1153,13 @@ class ROAMSModel:
             cumsum_y[hundred_pctl],
         ]
 
-        dist_summary.sort_values("Emissions Value",inplace=True,ascending=True)
+        dist_summary.sort_values(
+            f"Emissions Value ({COMMON_EMISSIONS_UNITS})",
+            inplace=True,
+            ascending=True
+        )
 
-        self.table_outputs["Production Summary"] = prod_summary
+        # Put the resulting table into self.table_outputs
         self.table_outputs["Combined Production Distribution Summary"] = dist_summary
     
     def mean_and_quantiles(self,values: np.ndarray) -> pd.Series:
@@ -1141,7 +1198,7 @@ class ROAMSModel:
 
         return output
     
-    def make_mean_production_dist_tables(self) -> pd.DataFrame:
+    def make_mean_production_cumdist_tables(self) -> pd.DataFrame:
         """
         Return a summary of the production emissions distributions by taking 
         the mean over all the monte-carlo iterations of all wells to 
@@ -1188,20 +1245,26 @@ class ROAMSModel:
         aer_em_quantiles = np.quantile(aerial_em,self._quantiles,axis=1).T
         
         # Save the mean aerial sample cumsum value
-        output["Aerial Only, Mean Cumulative Dist (kg/h)"] = aerial_cumsum.mean(axis=1)
-        output["Mean Aerial Emissions (kg/h)"] = aerial_em.mean(axis=1)
+        output[f"Aerial Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] = aerial_cumsum.mean(axis=1)
+        output[f"Mean Aerial Emissions ({COMMON_EMISSIONS_UNITS})"] = aerial_em.mean(axis=1)
         
         # Go through each quantile and define an output column based on [diff/correction],
         # for both cumulative values and emissions point estimates at individual plumes
         for i, q in enumerate(self._quantiles):
-            lbl_cum = f"Aerial Only, Cumulative Dist (kg/h), {str(100*q)}% CI"
-            lbl_em = f"Aerial Only Emissions (kg/h), {str(100*q)}% CI"
+            lbl_cum = f"Aerial Only, Cumulative Dist ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
+            lbl_em = f"Aerial Only Emissions ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
 
-            diff_cum = (aer_cumsum_quantiles[:,i] - output["Aerial Only, Mean Cumulative Dist (kg/h)"])/denominator
-            diff_em = (aer_em_quantiles[:,i] - output["Mean Aerial Emissions (kg/h)"])/denominator
+            diff_cum = (
+                aer_cumsum_quantiles[:,i] 
+                - output[f"Aerial Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
+            diff_em = (
+                aer_em_quantiles[:,i] 
+                - output[f"Mean Aerial Emissions ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
 
-            output[lbl_cum] = output["Aerial Only, Mean Cumulative Dist (kg/h)"] + diff_cum
-            output[lbl_em] = output["Mean Aerial Emissions (kg/h)"] + diff_em
+            output[lbl_cum] = output[f"Aerial Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] + diff_cum
+            output[lbl_em] = output[f"Mean Aerial Emissions ({COMMON_EMISSIONS_UNITS})"] + diff_em
         
         
         partial_detection_cumsum = pd_corr.sum(axis=0) - pd_corr.cumsum(axis=0)
@@ -1209,20 +1272,26 @@ class ROAMSModel:
         pd_em_quantiles = np.quantile(pd_corr,self._quantiles,axis=1).T
         
         # Save the mean partial detection cumsum value
-        output["Partial Detection Only, Mean Cumulative Dist (kg/h)"] = partial_detection_cumsum.mean(axis=1)
-        output["Mean Partial Detection Emissions (kg/h)"] = pd_corr.mean(axis=1)
+        output[f"Partial Detection Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] = partial_detection_cumsum.mean(axis=1)
+        output[f"Mean Partial Detection Emissions ({COMMON_EMISSIONS_UNITS})"] = pd_corr.mean(axis=1)
         
         # Go through each quantile and define an output column based on [diff/correction],
         # for both cumulative values and emissions point estimates at individual plumes
         for i, q in enumerate(self._quantiles):
-            lbl_cum = f"Partial Detection Only, Cumulative Dist (kg/h), {str(100*q)}% CI"
-            lbl_em = f"Partial Detection Only Emissions (kg/h), {str(100*q)}% CI"
+            lbl_cum = f"Partial Detection Only, Cumulative Dist ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
+            lbl_em = f"Partial Detection Only Emissions ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
 
-            diff_cum = (pd_cumsum_quantiles[:,i] - output["Partial Detection Only, Mean Cumulative Dist (kg/h)"])/denominator
-            diff_em = (pd_em_quantiles[:,i] - output["Mean Partial Detection Emissions (kg/h)"])/denominator
+            diff_cum = (
+                pd_cumsum_quantiles[:,i] 
+                - output[f"Partial Detection Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
+            diff_em = (
+                pd_em_quantiles[:,i] 
+                - output[f"Mean Partial Detection Emissions ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
 
-            output[lbl_cum] = output["Partial Detection Only, Mean Cumulative Dist (kg/h)"] + diff_cum
-            output[lbl_em] = output["Mean Partial Detection Emissions (kg/h)"] + diff_em
+            output[lbl_cum] = output[f"Partial Detection Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] + diff_cum
+            output[lbl_em] = output[f"Mean Partial Detection Emissions ({COMMON_EMISSIONS_UNITS})"] + diff_em
         
 
         simulated_em = np.sort(self.simulated_sample,axis=0)
@@ -1231,41 +1300,56 @@ class ROAMSModel:
         sim_em_quantiles = np.quantile(simulated_em,self._quantiles,axis=1).T
         
         # Save the mean simulated cumsum value
-        output["Simulated Only, Mean Cumulative Dist (kg/h)"] = simulated_cumsum.mean(axis=1)
-        output["Mean Simulated Emissions (kg/h)"] = simulated_em.mean(axis=1)
+        output[f"Simulated Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] = simulated_cumsum.mean(axis=1)
+        output[f"Mean Simulated Emissions ({COMMON_EMISSIONS_UNITS})"] = simulated_em.mean(axis=1)
         
         # Go through each quantile and define an output column based on [diff/correction],
         # for both cumulative values and emissions point estimates at individual plumes
         for i, q in enumerate(self._quantiles):
-            lbl_cum = f"Simulated Only, Cumulative Dist (kg/h), {str(100*q)}% CI"
-            lbl_em = f"Simulated Only Emissions (kg/h), {str(100*q)}% CI"
+            lbl_cum = f"Simulated Only, Cumulative Dist ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
+            lbl_em = f"Simulated Only Emissions ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
 
-            diff_cum = (sim_cumsum_quantiles[:,i] - output["Simulated Only, Mean Cumulative Dist (kg/h)"])/denominator
-            diff_em = (sim_em_quantiles[:,i] - output["Mean Simulated Emissions (kg/h)"])/denominator
+            diff_cum = (
+                sim_cumsum_quantiles[:,i] 
+                - output[f"Simulated Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
+            diff_em = (
+                sim_em_quantiles[:,i] 
+                - output[f"Mean Simulated Emissions ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
 
-            output[lbl_cum] = output["Simulated Only, Mean Cumulative Dist (kg/h)"] + diff_cum
-            output[lbl_em] = output["Mean Simulated Emissions (kg/h)"] + diff_em
+            output[lbl_cum] = output[f"Simulated Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] + diff_cum
+            output[lbl_em] = output[f"Mean Simulated Emissions ({COMMON_EMISSIONS_UNITS})"] + diff_em
         
-        overall_dist = np.sort(self.combined_samples,axis=0)
-        overall_cumsum = overall_dist.sum(axis=0) - overall_dist.cumsum(axis=0)
+        overall_dist = self.combined_samples.copy()
+        overall_cumsum = (
+            overall_dist.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0) 
+            - overall_dist.cumsum(axis=0) - self.prod_partial_detection_emissions.cumsum(axis=0)
+        )
         overall_cumsum_quantiles = np.quantile(overall_cumsum,self._quantiles,axis=1).T
         overall_em_quantiles = np.quantile(overall_dist,self._quantiles,axis=1).T
         
         # Save the mean simulated cumsum value
-        output["Combined Distribution, Mean Cumulative Dist (kg/h)"] = overall_cumsum.mean(axis=1)
-        output["Mean Combined Distribution Emissions (kg/h)"] = overall_dist.mean(axis=1)
+        output[f"Combined Distribution, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] = overall_cumsum.mean(axis=1)
+        output[f"Mean Combined Distribution Emissions ({COMMON_EMISSIONS_UNITS})"] = overall_dist.mean(axis=1)
         
         # Go through each quantile and define an output column based on [diff/correction],
         # for both cumulative values and emissions point estimates at individual plumes
         for i, q in enumerate(self._quantiles):
-            lbl_cum = f"Combined Distribution, Cumulative Dist (kg/h), {str(100*q)}% CI"
-            lbl_em = f"Combined Distribution Emissions (kg/h), {str(100*q)}% CI"
+            lbl_cum = f"Combined Distribution, Cumulative Dist ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
+            lbl_em = f"Combined Distribution Emissions ({COMMON_EMISSIONS_UNITS}), {str(100*q)}% CI"
 
-            diff_cum = (overall_cumsum_quantiles[:,i] - output["Combined Distribution, Mean Cumulative Dist (kg/h)"])/denominator
-            diff_em = (overall_em_quantiles[:,i] - output["Mean Combined Distribution Emissions (kg/h)"])/denominator
+            diff_cum = (
+                overall_cumsum_quantiles[:,i] 
+                - output[f"Combined Distribution, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
+            diff_em = (
+                overall_em_quantiles[:,i] 
+                - output[f"Mean Combined Distribution Emissions ({COMMON_EMISSIONS_UNITS})"]
+                )/denominator
 
-            output[lbl_cum] = output["Combined Distribution, Mean Cumulative Dist (kg/h)"] + diff_cum
-            output[lbl_em] = output["Mean Combined Distribution Emissions (kg/h)"] + diff_em
+            output[lbl_cum] = output[f"Combined Distribution, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] + diff_cum
+            output[lbl_em] = output[f"Mean Combined Distribution Emissions ({COMMON_EMISSIONS_UNITS})"] + diff_em
         
         self.table_outputs["Mean Production Distributions"] = output
     

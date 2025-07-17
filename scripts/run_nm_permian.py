@@ -42,6 +42,8 @@ if __name__=="__main__":
         plume_file = KAIROS_PERMIAN_PLUME_FILENAME, 
         source_file = KAIROS_PERMIAN_EMISSIONS_FILENAME,
         covered_productivity_file = COVERED_PRODUCTIVITY_FILE,
+        covered_productivity_col = "New Mexico Permian 2021 (mscf/site/day)",
+        covered_productivity_unit = "mscf/day",
         num_wells_to_simulate = 18030,
         well_visit_count = 81564,
         wells_per_site = 1.2,

@@ -2,6 +2,10 @@
 MPS_TO_MPH = 2.23694
 M3_TO_CUFT = 35.3147
 
+# Methane density at 1 atm and 25C, in kg/m3 and kg/cuft
+CH4_DENSITY_KGM3 = 0.657
+CH4_DENSITY_KGCUFT = CH4_DENSITY_KGM3 / M3_TO_CUFT # .657 kg/m3 * [1 m3 / 35.3147 cuft] = .0186 kg/cuft
+
 # A dictionary of unit : conversion to kg/h, where each dictionary value 
 # represents the amount of that unit in one kg/h. The unit of tons here is 
 # always metric.
@@ -53,7 +57,8 @@ def convert_units(value,unit_in : str,unit_out: str):
     Attempt to convert the given value from `unit_in` into `unit_out`, assuming 
     that both are in units of emissions rates, OR both are units of speed for 
     converting wind speeds. Unit conversions must be prescribed in the 
-    dictionaries `EMISSION_RATE_CONVERSIONS` and `WINDSPEED_CONVERSIONS`.
+    dictionaries `EMISSION_RATE_CONVERSIONS`, `WINDSPEED_CONVERSIONS`, or 
+    `PRODUCTION_CONVERSIONS`.
 
     Args:
         value (Any):
@@ -62,8 +67,8 @@ def convert_units(value,unit_in : str,unit_out: str):
 
         unit_in (str):
             A string representing the physical unit of the given value, which 
-            should exist in either `EMISSION_RATE_CONVERSIONS` or 
-            `WINDSPEED_CONVERSIONS`.
+            should exist in either `EMISSION_RATE_CONVERSIONS`,
+            `WINDSPEED_CONVERSIONS`, or `PRODUCTION_CONVERSIONS`.
 
         unit_out (str):
             A string representing the physical unit into which you want to 
@@ -92,6 +97,46 @@ def convert_units(value,unit_in : str,unit_out: str):
 
     raise KeyError(
         f"One of {unit_in = } or {unit_out = } are not in the conversion "
-        "dictionary for emissions rates or wind speed. Either you can add "
-        "new units to these dictionaries, or you may have mis-specified units."
+        "dictionary for emissions rates, wind speed, or volumetric production "
+        "rate. Either you can add new units to these dictionaries, or you may "
+        "be able to re-specify units."
     )
+
+def ch4_volume_to_mass(value, unit_in : str, unit_out : str):
+    """
+    Use available density information to convert a volumetric rate of 
+    CH4 production (e.g. mscf/day) to a rate of mass production (e.g. kg/h).
+
+    Args:
+        value (float, np.ndarray):
+            A value that will be multiplied with a conversion
+            factor to turn volume of CH4 into mass of CH4.
+
+        unit_in (str):
+            A volumetric rate of CH4 production.
+            E.g. "m3/day".
+
+        unit_out (str):
+            A mass rate of CH4 production.
+            E.g. "kg/hr"
+    """
+    unit_in, unit_out = unit_in.lower(), unit_out.lower()
+    vol, t_in = unit_in.split("/")
+    
+    # Based on the numerator (volume)
+    if vol=="m3":
+        kg = CH4_DENSITY_KGM3 * value
+    elif vol=="mscf":
+        kg = CH4_DENSITY_KGCUFT * value * 1000
+    elif vol=="cuft":
+        kg = CH4_DENSITY_KGCUFT * value
+    elif vol=="scf":
+        kg = CH4_DENSITY_KGCUFT * value
+    else:
+        raise ValueError(
+            f"The volumetric rate of CH4 production: `{unit_in}` can't "
+            "be parsed. You can either commit changes to the code to "
+            "accommodate this, or try a unit like 'mscf/d', 'm3/h'."
+        )
+
+    return convert_units(kg,f"kg/{t_in}",unit_out)
