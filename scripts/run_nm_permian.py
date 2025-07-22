@@ -14,12 +14,12 @@ SUB_MDL_FILENAME = "/Users/eneill/repos/ROAMS/data/Rutherford_million_samples_PE
 
 # This is the permian "well" plume data ripped out of analytica, with spoofed source data that describes everything as wells
 # (i.e. only the production subset of the data Analytica was using)
-# KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/old_permian_plumedata.csv"
-# KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/old_source_data.csv"
+KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/plume_table_allsources.csv"
+KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/permian_sources_allsources.csv"
 
 # This is all the permian data being used by Analytica described as "Kairos Permian", but ONLY the first plumes
-KAIROS_PERMIAN_PLUME_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/plumes_20250702.csv'
-KAIROS_PERMIAN_EMISSIONS_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/sources_20250702.csv'
+# KAIROS_PERMIAN_PLUME_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/plumes_20250702.csv'
+# KAIROS_PERMIAN_EMISSIONS_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/sources_20250702.csv'
 
 if __name__=="__main__":
     log = logging.getLogger("run_nm_permian")
