@@ -197,5 +197,9 @@ cython_debug/
 *.csv
 *.xlsx
 
+# Plots made in outputs
+*.png
+*.svg
+
 # OSX generated trash
 *.DS_Store
