@@ -1054,9 +1054,6 @@ class ROAMSModel:
                 f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})", 
                 f"Overall Combined Total Production CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
                 f"Transition Point ({COMMON_EMISSIONS_UNITS})",
-                f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})",
-                f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})",
-                f"Fractional CH4 Loss ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)",
             ],
             columns=pd.MultiIndex.from_product(
                 [["By Itself","Accounting for Transition Point"],quantity_cols],
