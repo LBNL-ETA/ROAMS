@@ -22,19 +22,16 @@ def power_correction(emissions_rate: np.ndarray) -> np.ndarray:
     """    
     return 4.08 * (emissions_rate ** .77)
 
-def zero_out(emissions : np.ndarray, noise_fn : Callable[[np.ndarray],np.ndarray]) -> np.ndarray:
+def zero_out(emissions : np.ndarray) -> np.ndarray:
     """
     An adjustment intended for sampled, corrected, and noise-adjusted 
-    aerial emissions data. Take the emissions data, and 
+    aerial emissions data. Take the emissions data, and zero out all the 
+    values that are <0.
 
     Args:
         emissions (np.ndarray):
             Aerially observed and sampled emissions, that have presumably
             been adjusted with noise that may have created values below 0.
-        
-        noise_fn (Callable):
-            A function that can take an array of emissions, and return 
-            a noise-adjusted version that can be used to simulate error.
 
     Returns:
         np.ndarray:

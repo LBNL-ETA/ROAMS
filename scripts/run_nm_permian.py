@@ -1,8 +1,6 @@
 import logging
 
-from roams.analysis import ROAMSModel
-from roams.aerial.partial_detection import PoD_bin
-from roams.aerial.assumptions import power_correction
+from roams.model import ROAMSModel
 
 COVERED_PRODUCTIVITY_FILE = "/Users/eneill/repos/ROAMS/data/production/Covered_gas_prod_percentiles_all_basins_by_well_Kairos_NM_Permian20221021.csv"
 SUB_MDL_FILENAME = "/Users/eneill/repos/ROAMS/data/Rutherford_million_samples_PERMIAN_20220917.csv" # <- Used in Analytica
@@ -37,44 +35,7 @@ if __name__=="__main__":
 
     log.info("Starting run")
 
-    r = ROAMSModel(
-        simmed_emission_file = SUB_MDL_FILENAME,
-        plume_file = KAIROS_PERMIAN_PLUME_FILENAME, 
-        source_file = KAIROS_PERMIAN_EMISSIONS_FILENAME,
-        covered_productivity_file = COVERED_PRODUCTIVITY_FILE,
-        covered_productivity_col = "New Mexico Permian 2021 (mscf/site/day)",
-        covered_productivity_unit = "mscf/day",
-        num_wells_to_simulate = 18030,
-        well_visit_count = 81564,
-        wells_per_site = 1.2,
-        stratify_sim_sample = True,
-        n_mc_samples = 100,
-        prod_transition_point = None,
-        midstream_transition_point = 40, # kgh
-        partial_detection_correction=True,
-        simulate_error = False,
-        PoD_fn = PoD_bin,
-        correction_fn = power_correction,
-        sim_em_col = "Site emissions [kg/d]",
-        sim_em_unit = "kg/d",
-        sim_prod_col = "Gas productivity [mscf/site/day]",
-        sim_prod_unit = "mscf/day",
-        source_id_name = "emission_source_id",
-        cutoff_col = None,
-        aerial_em_col = None,
-        aerial_em_unit = None,
-        wind_norm_col = "wind_independent_emission_rate_kghmps",
-        wind_norm_unit = "kgh:mps",
-        wind_speed_col = "wind_mps",
-        wind_speed_unit = "mps",
-        asset_col="asset_type",
-        prod_asset_type = ("Well site",),
-        midstream_asset_type = ("Pipeline","Compressor station","Unknown","Gas processing plant"),
-        coverage_count = "coverage_count",
-        foldername = "evan output",
-        save_mean_dist = True,
-        loglevel = loglevel
-    )
+    r = ROAMSModel("/Users/eneill/repos/ROAMS/input files/nm_perminan_json_input.json")
 
     r.perform_analysis()
     

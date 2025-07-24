@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-def PoD_bin(wind_normalized_emm: np.ndarray) -> np.ndarray:
+def bin(wind_normalized_emm: np.ndarray) -> np.ndarray:
     """
     Take an array of values representing wind-normalized emissions, and 
     return a probability of detection for each value, representing the fraction 
@@ -39,7 +39,7 @@ def PoD_bin(wind_normalized_emm: np.ndarray) -> np.ndarray:
 
     return pod
 
-def PoD_linear(wind_normalized_emm: np.ndarray) -> np.ndarray:
+def linear(wind_normalized_emm: np.ndarray) -> np.ndarray:
     """
     Take an array of values representing wind-normalized emissions, and 
     return a probability of detection for each value, representing the fraction 

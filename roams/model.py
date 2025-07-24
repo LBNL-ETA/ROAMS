@@ -9,12 +9,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from roams.conf import RESULT_DIR
+from roams.input import ROAMSConfig
 
-from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS, ALVAREZ_ET_AL_CH4_FRAC
+from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS
 
-from roams.aerial.assumptions import power_correction, normal, zero_out
 from roams.aerial.input import AerialSurveyData
-from roams.aerial.partial_detection import PoD_bin, PoD_linear
 
 from roams.simulated.stratify import stratify_sample
 from roams.simulated.input import SimulatedProductionAssetData
@@ -22,7 +21,6 @@ from roams.simulated.input import SimulatedProductionAssetData
 from roams.production.input import CoveredProductionData
 
 from roams.transition_point import find_transition_point
-from roams.utils import convert_units
 
 class ROAMSModel:
     """
@@ -56,361 +54,78 @@ class ROAMSModel:
 
     Args:
         
-        simmed_emission_file (str): 
-            A csv file with the simulated emissions distribution in tabular 
-            form. The table should also have simulated productivity associated 
-            to each simulated observation, which is used in the process of 
-            simulated emissions stratification.
-        
-        plume_file (str): 
-            The file path to the reported plume-level emissions. It's required 
-            that each plume record can be matched to each recorded source in 
-            the `source_file` by some source identifier.
-        
-        source_file (str): 
-            The file path to the covered sources. Should share a column 
-            identifier with `plume_file`, and should also contain a descriptor 
-            of the asset that best represents the source.
-        
-        covered_productivity_file (str, optional): 
-            The name of a file with an estimated distribution of productivity 
-            in the covered region, which will be used to re-weight the 
-            simulated data according to the "actual" productivity of the 
-            region (this process is called 'stratification' in the code).
-            It is also used to define fractional loss (i.e. leaked methane 
-            divided by the volume of all methane produced).
-            If not given, the code can't stratify the simulated sample, and 
-            won't be able to compute fractional volumetric loss as part of 
-            the outputs.
-            Defaults to None
-        
-        covered_productivity_col (str, optional): 
-            The name of the column in the table given by 
-            `covered_productivity_file` that holds the estimated per-site 
-            production in the covered region.
-            If not given when the file is given, an error will be raised.
-            Defaults to None.
-        
-        covered_productivity_unit (str, optional): 
-            The unit of `covered_productivity_col` in the table given by 
-            `covered_productivity_file` that holds the estimated per-site 
-            production in the covered region.
-            If not given when the file is given, an error will be raised.
-            Defaults to None.
-
-        frac_production_ch4 (float, optional):
-            The fraction of produced natural gas (reported in covered 
-            productivity) that is CH4.
-            Used in the definition of fractional loss when that's being 
-            calculated.
-            Defaults to ALVAREZ_ET_AL_CH4_FRAC.
-        
-        stratify_sim_sample (bool, optional): 
-            Whether or not the simulated emissions should be stratified to 
-            better reflect the true production estimated in this region (per 
-            the `covered_productivity_file`).
-            Defaults to True.
-        
-        n_mc_samples (int, optional): 
-            The number of monte-carlo iterations to do. In each monte-carlo 
-            iteration, the (perhaps stratified) simulated emissions are 
-            sampled, and the aerial emissions are sampled and noised as well.
-            The resulting distributions are then combined. All monte-carlo 
-            iterations are in the end part of the quantified results.
-            Defaults to 100.
-        
-        num_wells_to_simulate (int, optional): 
-            This is supposed to reflect the total number of unique well sites 
-            covered in this aerial campaign.
-            The code won't work if this isn't specified, but it's required 
-            to be derived from external analysis.
-            Defaults to None.
-        
-        well_visit_count (int, optional): 
-            This is supposed to reflect the total number of wells visited 
-            during the aerial campaign.
-            The code won't work if this isn't specified, but it's required 
-            to be derived from external analysis.
-            Defaults to None.
-        
-        wells_per_site (int, optional): 
-            This is supposed to reflect the average number of wells per 
-            well site in the covered aerial survey region. This gets used to 
-            derive confidence intervals based on experimental distributions.
-            The code won't work if this isn't specified, but it's required 
-            to be derived from external analysis.
-            Defaults to None.
-        
-        noise_fn (Callable, optional): 
-            A function that can take a numpy array, and return a properly 
-            noised version of it.
-            Defaults to normal.
-        
-        handle_zeros (Callable, optional): 
-            A function that can take an array of values (will be sampled and 
-            noised aerial data), as well as the noise function, and do 
-            something with below-zero values.
-            Defaults to zero_out.
-        
-        prod_transition_point (float, optional): 
-            A prescribed transition point to apply in the combined production 
-            emissions distribution, if applicable. If no such known 
-            transition point exists, supplying `None` will indicate to the 
-            code to find it by itself.
-            Defaults to None.
-        
-        midstream_transition_point (float, optional): 
-            A prescribed transition point to apply in the combined midstream 
-            emissions distribution, if applicable.
-            The code won't try to find any transition point in this case if 
-            not given.
-        
-        partial_detection_correction (bool, optional): 
-            Whether or not to apply a partial detection correction to sampled 
-            aerial emissions, reflecting the fact that some observed emissions 
-            are unlikely to be picked up, and having observed them likely 
-            means there is more in the overall region to model that would 
-            otherwise not be accounted for.
-            Defaults to True.
-        
-        simulate_error (bool, optional): 
-            Whether or not to apply `self.noise_fn` to sampled and corrected 
-            aerial emissions in order to help simulate error.
-            Defaults to True.
-        
-        PoD_fn (Callable, optional): 
-            A function that can take an array of wind-normalized emissions 
-            values, and return a probability of detection for each value. The 
-            result of this function will be fed into the equation to 
-            determine the multiplier for corresponding sampled emissions 
-            values:
-                (1/PoD -1), where `PoD` is the outcome of this function.
-            As such, this should not return any 0 values. If you don't want 
-            to add any additional weight to values with small probability, 
-            write your `PoD_fn` to limit the output probabilities, and set 
-            the probability to 1 for all observations that you don't want to 
-            add partial detection weight to.
-            Defaults to PoD_bin.
-        
-        correction_fn (Callable, optional): 
-            A function that can take raw sampled aerial emissions data (equal 
-            to [wind normalized emissions]*[wind speed]), and applies a 
-            deterministic correction to account for macroscopic average 
-            measurement bias.
-            Defaults to power_correction.
-
-        sim_em_col (str, optional): 
-            The name of the column in `simulated_results` that holds the 
-            estimates of emissions from a well in the covered study region.
-            This is required for the ROAMSModel to operate.
-            Defaults to None.
-
-        sim_em_unit (str, optional): 
-            The units of the emissions rate described in `emissions_col`.
-            This is required for the ROAMSModel to opearate.
-            E.g. "kgh".
-
-        sim_prod_col (str, optional): 
-            The name of the column in `simulated_results` that holds the 
-            estimates of production from a well in the covered study region.
-            If not specified, the code will later break if this ends up 
-            being required for stratification or any other analysis.
-            Defaults to None.
-        
-        sim_prod_unit (str, optional): 
-            The units of production described in `production_col`.
-            E.g. "mscf/day".
-            Defaults to None.
-        
-        source_id_name (str, optional):
-            The column name in both `plume_file` and `source_file` that 
-            holds the unique source identifiers. The code will use the values 
-            in this column in order to link the tables together.
-            The code will raise an error if not specified.
-            Defaults to None.
-        
-        aerial_em_col (str, optional): 
-            The name of the column in the `plume_file` plume emissions table 
-            that describes the emissions rate.
-            If None, you MUST be specifying wind-normalized emissions rate 
-            and wind-speed to be able to infer this.
-            Defaults to None.
-        
-        aerial_em_unit (str, optional): 
-            The physical unit of emissions rate, if the corresponding column 
-            in the plume file (`emm_col`) has been specified.
-            E.g. "kgh".
-            Defaults to None.
-
-        wind_norm_col (str, optional): 
-            The name of the column in the `plume_file` plume emissions table 
-            that describes the wind-normalized emissions rate.
-            If None, you MUST be specifying emissions and wind-speed to be 
-            able to infer this.
-            Defaults to "wind_independent_emission_rate_kghmps".
-        
-        wind_norm_unit (str, optional): 
-            The physical unit of wind-normalized emissions, if specified. Use 
-            a ":" to differentiate between the nominator (emissions rate) and 
-            the denominator (wind speed).
-            E.g. "kgh:mps".
-            Defaults to None.
-
-        wind_speed_col (str, optional): 
-            The name of the column in the `plume_file` plume emissions table 
-            that describes the wind speed.
-            If None, it's assumed it won't be needed.
-            Defaults to None.
-        
-        wind_speed_unit (str, optional): 
-            The physical unit of the specified wind speed column, if given.
-            E.g. "mps".
-            Defaults to None.
-        
-        cutoff_col (str, optional): 
-            The name of the column in the `plume_file` plume emissions table
-            that holds a flag for whether or not the plume was cut by the 
-            field of view of the survey equipment.
-            Defaults to "cutoff".
-        
-        coverage_count (str, optional): 
-            The name of the column in the `source_file` source table that 
-            holds the number of times the given piece of infrastructure was 
-            viewed (whether or not emissions were observed).
-            Defaults to "coverage_count".
-        
-        asset_col (str, optional): 
-            The name of the column in the source table that describes the 
-            type of infrastructure producing the corresponding plumes. This, 
-            together with `asset_type`, is used to segregate the aerial 
-            survey data.
-            Defaults to None.
-
-        asset_type (tuple, optional): 
-            A tuple of asset types under an "asset_type" column to include 
-            in the estimation of aerial emissions.
-            Defaults to ("Well site",).
-        
-        foldername (str, optional): 
-            A folder name into which given outputs will be saved under 
-            "run_results" (=roams.conf.RESULT_DIR).
-            If None, will use a timestamp.
-            Defaults to None.
-        
-        save_mean_dist (bool, optional): 
-            Whether or not to save a "mean" distribution of all the components
-            of the estimated production distributions (i.e. aerial, partial 
-            detection, simulated).
-            Defaults to True.
-        
-        loglevel (int, optional): 
-            The log level to apply to analysis happening within the ROAMSModel 
-            and submodules that it calls on.
-            Defaults to logging.INFO
+        input_file (str | dict):
+            Either a path to a JSON input file (str), or the dict embodied 
+            therein (dict). This will be given to ROAMSConfig for parsing, 
+            type checking, and the assignment of defaults. For more 
+            information, head on over to roams.input.ROAMSConfig to get more 
+            information about what information is required.
     """
-    def __init__(
-        self,
-        simmed_emission_file : str,
-        plume_file : str, 
-        source_file : str,
-        covered_productivity_file : str = None,
-        covered_productivity_col : str = None,
-        covered_productivity_unit : str = None,
-        frac_production_ch4 : float = ALVAREZ_ET_AL_CH4_FRAC,
-        stratify_sim_sample : bool = True,
-        n_mc_samples : int = 100,
-        num_wells_to_simulate : int = None,
-        well_visit_count : int = None,
-        wells_per_site : float = None,
-        noise_fn : Callable[[np.ndarray],np.ndarray] = normal,
-        handle_zeros : Callable[[np.ndarray],np.ndarray] = zero_out,
-        prod_transition_point : float = None,
-        midstream_transition_point : float = None,
-        partial_detection_correction : bool = True,
-        simulate_error : bool = True,
-        PoD_fn : Callable[[np.ndarray],np.ndarray] = PoD_bin,
-        correction_fn : Callable[[np.ndarray],np.ndarray] = power_correction,
-        sim_em_col : str = None,
-        sim_em_unit : str = None,
-        sim_prod_col : str = None,
-        sim_prod_unit : str = None,
-        source_id_name : str = None,
-        aerial_em_col : str = None,
-        aerial_em_unit : str = None,
-        wind_norm_col : str = None,
-        wind_norm_unit : str = None,
-        wind_speed_col : str = None,
-        wind_speed_unit : str = None,
-        cutoff_col : str = None,
-        coverage_count : str = None,
-        asset_col : str = None,
-        prod_asset_type : tuple = None,
-        midstream_asset_type : tuple = None,
-        foldername : str=None,
-        save_mean_dist : bool = True,
-        loglevel : int =logging.INFO,
-        ):
-        # If result folder name not specified, use a timestamp.
-        if foldername is None:
-            # E.g. foldername = "1 Jan 2000 01-23-45"
-            foldername = datetime.now().strftime("%d %b %Y %H-%M-%S")
-        
-        # self.outfolder is a directory into which result tables will be 
-        # written.
-        self.outfolder = os.path.join(RESULT_DIR,foldername)
+    def __init__(self,input_file : str | dict):
 
+        # Use the ROAMSConfig to read through the input JSON file.
+        self.cfg = ROAMSConfig(input_file)
+
+        ### Output specification
+        # self.outfolder is a directory into which result tables will be 
+        self.outfolder =            os.path.join(RESULT_DIR,self.cfg.output.foldername)
+        self.save_mean_dist =       self.cfg.output.save_mean_dist
+        self.loglevel =             self.cfg.output.loglevel
+        
         # Set the log using prescribed level
-        self.log = logging.getLogger("roams.analysis.ROAMSModel")
-        self.log.setLevel(loglevel)
-        self.loglevel = loglevel
+        self.log = logging.getLogger("roams.model.ROAMSModel")
+        self.log.setLevel(self.loglevel)
+        # A dictionary attribute into which output tables will be put before writing
+        self.table_outputs = dict()
 
         # The simulation emissions & production input file
-        self.simmed_emission_file = simmed_emission_file
+        self.simmed_emission_file = self.cfg.prod_sim.em_file
+        self.sim_em_col =           self.cfg.prod_sim.em_col
+        self.sim_em_unit =          self.cfg.prod_sim.em_unit
+        self.sim_prod_col =         self.cfg.prod_sim.prod_col
+        self.sim_prod_unit =        self.cfg.prod_sim.prod_unit
 
+        ### Properties of the covered region and its infrastructure
         # Estimate of covered production in survey region (can be None)
-        self.covered_productivity = None
-        if covered_productivity_file is not None:
-            self.covered_productivity = CoveredProductionData(
-                covered_production_file = covered_productivity_file,
-                covered_production_col = covered_productivity_col,
-                covered_production_unit = covered_productivity_unit,
-                frac_production_ch4 = frac_production_ch4,
-                loglevel = self.loglevel,
-            )
+        self.covered_productivity = CoveredProductionData(
+            covered_production_file =   self.cfg.coveredRegion.productivity_file,
+            covered_production_col =    self.cfg.coveredRegion.productivity_col,
+            covered_production_unit =   self.cfg.coveredRegion.productivity_unit,
+            frac_production_ch4 =       self.cfg.coveredRegion.frac_production_ch4,
+            loglevel = self.loglevel,
+        )
+        # Properties of surveyed infrastructure
+        self.num_wells_to_simulate =self.cfg.coveredRegion.num_wells
+        self.well_visit_count =     self.cfg.coveredRegion.well_visit_count
+        self.wells_per_site =       self.cfg.coveredRegion.wells_per_site
         
         # Specification of aerial input data
-        self.plume_file = plume_file
-        self.source_file = source_file
-        self.source_id_name = source_id_name
-        self.aerial_em_col = aerial_em_col
-        self.aerial_em_unit = aerial_em_unit
-        self.wind_norm_col = wind_norm_col
-        self.wind_norm_unit = wind_norm_unit
-        self.wind_speed_col = wind_speed_col
-        self.wind_speed_unit = wind_speed_unit
-        self.cutoff_col = cutoff_col
-        self.coverage_count = coverage_count
-        self.asset_col = asset_col
-        self.prod_asset_type = prod_asset_type
-        self.midstream_asset_type = midstream_asset_type
-
-        # Specification of simulated emissions + production input data
-        self.sim_em_col = sim_em_col
-        self.sim_em_unit = sim_em_unit
-        self.sim_prod_col = sim_prod_col
-        self.sim_prod_unit = sim_prod_unit
+        self.plume_file =           self.cfg.aerial.plume_file
+        self.source_file =          self.cfg.aerial.source_file
+        self.source_id_name =       self.cfg.aerial.source_id_name
+        self.aerial_em_col =        self.cfg.aerial.em_col
+        self.aerial_em_unit =       self.cfg.aerial.em_unit
+        self.wind_norm_col =        self.cfg.aerial.wind_norm_col
+        self.wind_norm_unit =       self.cfg.aerial.wind_norm_unit
+        self.wind_speed_col =       self.cfg.aerial.wind_speed_col
+        self.wind_speed_unit =      self.cfg.aerial.wind_speed_unit
+        self.cutoff_col =           self.cfg.aerial.cutoff_col
+        self.coverage_count =       self.cfg.aerial.coverage_count
+        self.asset_col =            self.cfg.aerial.asset_col
+        self.prod_asset_type =      self.cfg.aerial.prod_asset_type
+        self.midstream_asset_type = self.cfg.aerial.midstream_asset_type
         
         # Specifications of algorithm behavior
-        self.stratify_sim_sample = stratify_sim_sample
-        self.n_mc_samples = n_mc_samples
-        self.noise_fn = noise_fn
-        self.handle_zeros = handle_zeros
-        self.prod_transition_point = prod_transition_point
-        self.midstream_transition_point = midstream_transition_point
-        self.partial_detection_correction = partial_detection_correction
-        self.simulate_error = simulate_error
-        self.PoD_fn = PoD_fn
-        self.correction_fn = correction_fn
+        self.stratify_sim_sample =          self.cfg.algorithm.stratify_sim_sample
+        self.n_mc_samples =                 self.cfg.algorithm.n_mc_samples
+        self.noise_fn =                     self.cfg.algorithm.noise_fn
+        self.handle_negative =              self.cfg.algorithm.handle_negative
+        self.prod_transition_point =        self.cfg.algorithm.prod_transition_point
+        self.midstream_transition_point =   self.cfg.algorithm.midstream_transition_point
+        self.partial_detection_correction = self.cfg.algorithm.partial_detection_correction
+        self.simulate_error =               self.cfg.algorithm.simulate_error
+        self.PoD_fn =                       self.cfg.algorithm.PoD_fn
+        self.correction_fn =                self.cfg.algorithm.correction_fn
 
         if not (
             self.prod_transition_point==None 
@@ -422,21 +137,11 @@ class ROAMSModel:
                 "only be `None` or a Python-native numerical value."
             )
         
-        # Properties of surveyed infrastructure
-        self.num_wells_to_simulate = num_wells_to_simulate
-        self.well_visit_count = well_visit_count
-        self.wells_per_site = wells_per_site
-        
-        # Output specification, including making blank dictionary of table 
-        # outputs.
-        self.save_mean_dist = save_mean_dist
-        self.table_outputs = dict()
-
         # Quantiles used in quantification of MC results 
         # (no reason to mess with this)
         self._quantiles = (.025,.975)
         self.log.debug(f"{self._quantiles = }")
-
+    
     def perform_analysis(self):
         """
         The method that will actually perform the analysis as specified.
@@ -458,24 +163,23 @@ class ROAMSModel:
 
     def load_data(self):
         """
-        Load the simulated data, segregated separately into simulated 
-        emissions and production.
+        Load the simulated production data, segregated separately into 
+        simulated emissions and production.
 
         Load the aerial data, segregated into records of plumes and sources 
         separately.
         """
         self.log.info("Loading simulated and aerial data...")
-        self.read_simulated_data()
+        self.read_simulated_prod_data()
         self.read_aerial_data()
 
-    def read_simulated_data(self, simdataclass : SimulatedProductionAssetData = SimulatedProductionAssetData):
+    def read_simulated_prod_data(self, simdataclass : SimulatedProductionAssetData = SimulatedProductionAssetData):
         """
-        Return a numpy array of simulated emissions values. By default, this 
-        assumes a specific column name and implicit unit.
+        Use a `simdataclass` to make sense of the available simulated 
+        emissions of production emissions and CH4 production rates.
 
-        Returns:
-            tuple[np.ndarray]:
-                A tuple of (simulated emissions, simulated productivity)
+        Save it to `prod_sim_results`, which is intended to be the entrypoint 
+        for unit-converted arrays of results.
         """
         self.prod_sim_results = simdataclass(
             self.simmed_emission_file,
@@ -834,7 +538,7 @@ class ROAMSModel:
             f"{(emissions<=0).sum(axis=0).mean()} values ≤0 in each "
             "monte-carlo iteration."
         )
-        emissions = self.handle_zeros(emissions,self.noise_fn)
+        emissions = self.handle_negative(emissions)
 
         return emissions, wind_normalized_em
     
