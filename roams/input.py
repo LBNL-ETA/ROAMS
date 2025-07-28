@@ -13,131 +13,69 @@ import roams.aerial.assumptions
 # All highest-level keys, and listed keys within, have to exist.
 # It also controls what types each input has to be.
 _REQUIRED_CONFIGS = {
-    "prod_sim" : [
-        ("em_file", str),
-        ("em_col", str),
-        ("em_unit", str)
-    ],
-    "aerial" : [
-        ("plume_file",str),
-        ("source_file",str),
-        ("source_id_name",str),
-        ("asset_col",str),
-        ("prod_asset_type",Iterable),
-        ("midstream_asset_type",Iterable),
-        ("coverage_count",str)
-    ],
-    "coveredRegion" : [
-        ("productivity_file",str),
-        ("productivity_col",str),
-        ("productivity_unit",str),
-        ("num_wells",int),
-        ("well_visit_count",int),
-        ("wells_per_site",float),
-    ],
-    "algorithm" : [
-        ("midstream_transition_point",(float,int)),
-    ],
-    "output" : [],
+    # Simulated production data 
+    "sim_em_file" :  str,
+    "sim_em_col" :  str,
+    "sim_em_unit" :  str,
+    
+    # Aerial data specification
+    "plume_file" : str,
+    "source_file" : str,
+    "source_id_name" : str,
+    "asset_col" : str,
+    "prod_asset_type" : Iterable,
+    "midstream_asset_type" : Iterable,
+    "coverage_count" : str,
+        
+    # Attributes of covered region (not derived here)
+    "covered_productivity_file" : str,
+    "covered_productivity_col" : str,
+    "covered_productivity_unit" : str,
+    "num_wells_to_simulate" : int,
+    "well_visit_count" : int,
+    "wells_per_site" : float,
+    
+    # Algorithmic required inputs
+    "midstream_transition_point" : (float,int),
 }
 
 # This constant controls the defaults for the optional parts of the input 
 # specification.
 _DEFAULT_CONFIGS = {
-    "prod_sim" : [
-        ("prod_col",None),
-        ("prod_unit",None),
-    ],
-    "aerial" : [
-        ("em_col",None),
-        ("em_unit",None),
-        ("wind_norm_col",None),
-        ("wind_norm_unit",None),
-        ("wind_speed_col",None),
-        ("wind_speed_unit",None),
-        ("cutoff_col",None),
-    ],
-    "coveredRegion" : [
-        ("frac_production_ch4",ALVAREZ_ET_AL_CH4_FRAC),
-    ],
-    "algorithm" : [
-        ("stratify_sim_sample",True),
-        ("n_mc_samples",100),
-        ("prod_transition_point",None),
-        ("partial_detection_correction",True),
-        ("simulate_error",True),
-        ("handle_negative","zero_out"),
-        ("PoD_fn","bin"),
-        ("correction_fn","power_correction"),
-        ("noise_fn","normal"),
-    ],
-    "output" : [
-        ("foldername",None),
-        ("save_mean_dist",True),
-        ("loglevel",logging.INFO),
-    ],
+    # Name of production column and unit in simulated data defaults
+    "sim_prod_col" : None,
+    "sim_prod_unit" : None,
+
+    # Aerial emissions and data specification defaults
+    "aerial_em_col" : None,
+    "aerial_em_unit" : None,
+    "wind_norm_col" : None,
+    "wind_norm_unit" : None,
+    "wind_speed_col" : None,
+    "wind_speed_unit" : None,
+    "cutoff_col" : None,
+
+    # Algorithmic input defaults
+    # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
+    "frac_production_ch4" : ALVAREZ_ET_AL_CH4_FRAC,
+    "stratify_sim_sample" : True,
+    "n_mc_samples" : 100,
+    "prod_transition_point" : None,
+    "partial_detection_correction" : True,
+    "simulate_error" : True,
+    "handle_negative" : "zero_out",
+    "PoD_fn" : "bin",
+    "correction_fn" : "power_correction",
+    "noise_fn" : "normal",
+    
+    # Output specification defaults. 
+    # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
+    "foldername" : None,
+    "save_mean_dist" : True,
+    "loglevel" : logging.INFO,
 }
 
-# Config will be a base class that does the basic parsing of nested 
-# information in an input JSON file, in a very un-opinionated fashion.
-class Config:
-
-    def __init__(self,config : str | dict):
-        """
-        Take an input file path (str) or dictionary, and use the content 
-        thereof to set nested attributes representing the provided 
-        information.
-
-        This class has absolutely no opinion about the content or structure of 
-        the provided configuration, except that the keys of the corresponding 
-        dictionary must be valid class attribute names in Python, and the 
-        original content (if in a file) should be valid JSON.
-
-        E.g. 
-        >>> config = {
-                "A":{"B":10,"C":[1,2,3]},
-                "B":true,
-            }
-        >>> cfg = Config(config)
-        >>> cfg.B
-            
-            True
-
-        >>> cfg.A
-
-            <class Config at location 0x10dff910>
-
-        >>> cfg.A.B
-
-            10
-
-        Args:
-            config (str | dict):
-                Either the path to an input specification file (str), or 
-                an already-read dictionary of inputs. If it's a path to a 
-                file, it will immediately be turned into a dictionary.
-        """
-        # If the input value is a string, assume it's a file path and try 
-        # to read it.
-        if isinstance(config,str):
-            log.info(f"Reading input configuration from {config}")
-            with open(config,"r") as f:
-                config = json.load(f)
-
-        # For each key : value pair, assign an attribute to this instance
-        for k, v in config.items():
-            
-            # If the value is a dictionary, make it a nested attribute
-            if isinstance(v,dict):
-                log.debug(f"Setting {k} to the nested attributes held in {v}")
-                setattr(self,k,Config(v))
-            
-            # If the value isn't a dictionary, assign it as an attribute
-            else:
-                log.debug(f"Setting {k} to {v}")
-                setattr(self,k,v)
-
-class ROAMSConfig(Config):
+class ROAMSConfig:
     """
     The ROAMSConfig class is intended to handle the parsing, typing, 
     default behavior, and error-raising of the ROAMS input specification.
@@ -194,89 +132,81 @@ class ROAMSConfig(Config):
             ValueError:
                 When the type of a required input specification is incorrect.
         """
-        # Call parent method to create nested attribute structure
-        super().__init__(config)
-        
-        # After having parsed the file content, do some checking of what was 
-        # provided and fill in defaults.
-        for cfg, reqs in _reqs.items():
-            
-            # Assert that each of the highest-level keys of prescribed 
-            # requirements exist on the class as attributes.
-            if not hasattr(self,cfg):
+        # Convert config_dict to dictionary if it's a string
+        if isinstance(config,str):
+            with open(config,"r") as f:
+                config = json.load(f)
+                
+        # Go through the required configs and assert that they exist, and 
+        # that they're the correct type
+        for k,v in _reqs.items():
+            if k not in config.keys():
                 raise KeyError(
-                    f"Your input specification should have '{cfg}' as a key, "
-                    "but it's missing. Revisit your input and make sure it's "
-                    "put together correctly."
+                    f"Input value '{k}' is required, but was not specified."
                 )
+            
+            if not isinstance(config[k],v):
+                raise ValueError(
+                    f"The input value '{k}'={config[k]} is expected to be "
+                    f"type {v}, but it wasn't. You'll have to update your "
+                    "input."
+                )
+            
+        # Go through each of the defaults and assign default value if it 
+        # doesn't exist or is None
+        for k,v in _def.items():
+            if config.get(k) is None:
+                log.info(
+                    f"{k} not provided as an argument. Will set it to {v}."
+                )
+                config[k] = v
 
-            # E.g. cfg_field = self.prod_sim
-            cfg_field = getattr(self,cfg)
-
-            for name, _type in reqs:
-                # For each (sub-attribute, type) pair, assert that the given 
-                # required attribute is the correct type.
-                if not hasattr(cfg_field,name):
-                    raise KeyError(
-                        f"Your input specification should have '{name}' as a key "
-                        f"under '{cfg}', but it's missing. Revisit your input "
-                        "and make sure it's put together correctly."
-                    )
-
-                # E.g. value = self.prod_sim.em_file
-                value = getattr(cfg_field,name)
-                
-                if not isinstance(value,_type):
-                    raise ValueError(
-                        f"The input configuration '{name}' under '{cfg}' is "
-                        f"intended to be of type '{_type}'. Instead, '{value}' "
-                        "was provided."
-                    )
-                
-            defaults = _def.get(cfg,dict())
-            for name, default in defaults:
-                
-                # If the attribute doesn't exist, set it with an info message
-                if getattr(cfg_field,name,None) is None:
-                    log.info(
-                        f"{cfg}.{name} is being set to the {default = }"
-                    )
-                    setattr(cfg_field,name,default)
-                else:
-                    log.debug(
-                        f"{cfg}.{name} is given as {getattr(cfg_field,name)}"
-                    )
+        # By this point all the keys in _req and _def are in `config`. We 
+        # assign them all as attributes
+        for k,v in config.items():
+            log.debug(
+                f"Setting self.{k} = {v} from provided config (perhaps with some "
+                f"defaults)."
+            )
+            setattr(self,k,v)
+            if k not in _reqs.keys() and k not in _def.keys():
+                log.warning(
+                    f"You specified an argument '{k}'={v} in your input, but "
+                    "this argument isn't required and doesn't have an associated "
+                    "default. Chances are the code will do nothing with it. "
+                    "Did you misspecify an input value?"
+                )
 
         ### Do some after-the-fact assignment with specific behaviors
             
         # If foldername is None: provide a timestamp
-        if self.output.foldername is None:
+        if self.foldername is None:
             # E.g. foldername = "1 Jan 2000 01-23-45"
-            self.output.foldername = datetime.now().strftime("%d %b %Y %H-%M-%S")
+            self.foldername = datetime.now().strftime("%d %b %Y %H-%M-%S")
             log.debug(
-                "The folder-name wasn't specied. So will use a timestamp: "
-                f"'{self.output.foldername}'"
+                "The folder-name wasn't specified. So will use a timestamp: "
+                f"'{self.foldername}' instead."
             )
     
         # If loglevel is None, set to logging.INFO
-        if self.output.loglevel is None:
+        if self.loglevel is None:
             log.debug(
                 "Loglevel was set to None, so setting to logging.INFO"
             )
-            self.output.loglevel = logging.INFO
+            self.loglevel = logging.INFO
 
         # Look up the partial detection function
-        if isinstance(self.algorithm.PoD_fn,str):
-            self.algorithm.PoD_fn = getattr(roams.aerial.partial_detection,self.algorithm.PoD_fn)
+        if isinstance(self.PoD_fn,str):
+            self.PoD_fn = getattr(roams.aerial.partial_detection,self.PoD_fn)
         
         # Look up the bias correction function
-        if isinstance(self.algorithm.correction_fn,str):
-            self.algorithm.correction_fn = getattr(roams.aerial.assumptions,self.algorithm.correction_fn)
+        if isinstance(self.correction_fn,str):
+            self.correction_fn = getattr(roams.aerial.assumptions,self.correction_fn)
         
         # Look up the error-simulating noise function
-        if isinstance(self.algorithm.noise_fn,str):
-            self.algorithm.noise_fn = getattr(roams.aerial.assumptions,self.algorithm.noise_fn)
+        if isinstance(self.noise_fn,str):
+            self.noise_fn = getattr(roams.aerial.assumptions,self.noise_fn)
         
         # Look up the handle-negative-emissions function
-        if isinstance(self.algorithm.handle_negative,str):
-            self.algorithm.handle_negative = getattr(roams.aerial.assumptions,self.algorithm.handle_negative)
+        if isinstance(self.handle_negative,str):
+            self.handle_negative = getattr(roams.aerial.assumptions,self.handle_negative)

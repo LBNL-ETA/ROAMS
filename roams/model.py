@@ -68,9 +68,9 @@ class ROAMSModel:
 
         ### Output specification
         # self.outfolder is a directory into which result tables will be 
-        self.outfolder =            os.path.join(RESULT_DIR,self.cfg.output.foldername)
-        self.save_mean_dist =       self.cfg.output.save_mean_dist
-        self.loglevel =             self.cfg.output.loglevel
+        self.outfolder =            os.path.join(RESULT_DIR,self.cfg.foldername)
+        self.save_mean_dist =       self.cfg.save_mean_dist
+        self.loglevel =             self.cfg.loglevel
         
         # Set the log using prescribed level
         self.log = logging.getLogger("roams.model.ROAMSModel")
@@ -79,53 +79,53 @@ class ROAMSModel:
         self.table_outputs = dict()
 
         # The simulation emissions & production input file
-        self.simmed_emission_file = self.cfg.prod_sim.em_file
-        self.sim_em_col =           self.cfg.prod_sim.em_col
-        self.sim_em_unit =          self.cfg.prod_sim.em_unit
-        self.sim_prod_col =         self.cfg.prod_sim.prod_col
-        self.sim_prod_unit =        self.cfg.prod_sim.prod_unit
+        self.simmed_emission_file = self.cfg.sim_em_file
+        self.sim_em_col =           self.cfg.sim_em_col
+        self.sim_em_unit =          self.cfg.sim_em_unit
+        self.sim_prod_col =         self.cfg.sim_prod_col
+        self.sim_prod_unit =        self.cfg.sim_prod_unit
 
         ### Properties of the covered region and its infrastructure
         # Estimate of covered production in survey region (can be None)
         self.covered_productivity = CoveredProductionData(
-            covered_production_file =   self.cfg.coveredRegion.productivity_file,
-            covered_production_col =    self.cfg.coveredRegion.productivity_col,
-            covered_production_unit =   self.cfg.coveredRegion.productivity_unit,
-            frac_production_ch4 =       self.cfg.coveredRegion.frac_production_ch4,
-            loglevel = self.loglevel,
+            covered_production_file =   self.cfg.covered_productivity_file,
+            covered_production_col =    self.cfg.covered_productivity_col,
+            covered_production_unit =   self.cfg.covered_productivity_unit,
+            frac_production_ch4 =       self.cfg.frac_production_ch4,
+            loglevel =                  self.loglevel,
         )
         # Properties of surveyed infrastructure
-        self.num_wells_to_simulate =self.cfg.coveredRegion.num_wells
-        self.well_visit_count =     self.cfg.coveredRegion.well_visit_count
-        self.wells_per_site =       self.cfg.coveredRegion.wells_per_site
+        self.num_wells_to_simulate =self.cfg.num_wells_to_simulate
+        self.well_visit_count =     self.cfg.well_visit_count
+        self.wells_per_site =       self.cfg.wells_per_site
         
         # Specification of aerial input data
-        self.plume_file =           self.cfg.aerial.plume_file
-        self.source_file =          self.cfg.aerial.source_file
-        self.source_id_name =       self.cfg.aerial.source_id_name
-        self.aerial_em_col =        self.cfg.aerial.em_col
-        self.aerial_em_unit =       self.cfg.aerial.em_unit
-        self.wind_norm_col =        self.cfg.aerial.wind_norm_col
-        self.wind_norm_unit =       self.cfg.aerial.wind_norm_unit
-        self.wind_speed_col =       self.cfg.aerial.wind_speed_col
-        self.wind_speed_unit =      self.cfg.aerial.wind_speed_unit
-        self.cutoff_col =           self.cfg.aerial.cutoff_col
-        self.coverage_count =       self.cfg.aerial.coverage_count
-        self.asset_col =            self.cfg.aerial.asset_col
-        self.prod_asset_type =      self.cfg.aerial.prod_asset_type
-        self.midstream_asset_type = self.cfg.aerial.midstream_asset_type
+        self.plume_file =           self.cfg.plume_file
+        self.source_file =          self.cfg.source_file
+        self.source_id_name =       self.cfg.source_id_name
+        self.aerial_em_col =        self.cfg.aerial_em_col
+        self.aerial_em_unit =       self.cfg.aerial_em_unit
+        self.wind_norm_col =        self.cfg.wind_norm_col
+        self.wind_norm_unit =       self.cfg.wind_norm_unit
+        self.wind_speed_col =       self.cfg.wind_speed_col
+        self.wind_speed_unit =      self.cfg.wind_speed_unit
+        self.cutoff_col =           self.cfg.cutoff_col
+        self.coverage_count =       self.cfg.coverage_count
+        self.asset_col =            self.cfg.asset_col
+        self.prod_asset_type =      self.cfg.prod_asset_type
+        self.midstream_asset_type = self.cfg.midstream_asset_type
         
         # Specifications of algorithm behavior
-        self.stratify_sim_sample =          self.cfg.algorithm.stratify_sim_sample
-        self.n_mc_samples =                 self.cfg.algorithm.n_mc_samples
-        self.noise_fn =                     self.cfg.algorithm.noise_fn
-        self.handle_negative =              self.cfg.algorithm.handle_negative
-        self.prod_transition_point =        self.cfg.algorithm.prod_transition_point
-        self.midstream_transition_point =   self.cfg.algorithm.midstream_transition_point
-        self.partial_detection_correction = self.cfg.algorithm.partial_detection_correction
-        self.simulate_error =               self.cfg.algorithm.simulate_error
-        self.PoD_fn =                       self.cfg.algorithm.PoD_fn
-        self.correction_fn =                self.cfg.algorithm.correction_fn
+        self.stratify_sim_sample =          self.cfg.stratify_sim_sample
+        self.n_mc_samples =                 self.cfg.n_mc_samples
+        self.noise_fn =                     self.cfg.noise_fn
+        self.handle_negative =              self.cfg.handle_negative
+        self.prod_transition_point =        self.cfg.prod_transition_point
+        self.midstream_transition_point =   self.cfg.midstream_transition_point
+        self.partial_detection_correction = self.cfg.partial_detection_correction
+        self.simulate_error =               self.cfg.simulate_error
+        self.PoD_fn =                       self.cfg.PoD_fn
+        self.correction_fn =                self.cfg.correction_fn
 
         if not (
             self.prod_transition_point==None 
