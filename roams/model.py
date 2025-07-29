@@ -1,25 +1,17 @@
-from collections.abc import Callable
 import os
 import logging
-import datetime
 
 import pandas as pd
 import numpy as np
 
 from matplotlib import pyplot as plt
 
+from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS
 from roams.conf import RESULT_DIR
+
 from roams.input import ROAMSConfig
 
-from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS
-
-from roams.aerial.input import AerialSurveyData
-
 from roams.simulated.stratify import stratify_sample
-from roams.simulated.input import SimulatedProductionAssetData
-
-from roams.production.input import CoveredProductionData
-
 from roams.transition_point import find_transition_point
 
 class ROAMSModel:
@@ -63,7 +55,8 @@ class ROAMSModel:
     """
     def __init__(self,input_file : str | dict):
 
-        # Use the ROAMSConfig to read through the input JSON file.
+        # Use the ROAMSConfig to read through the input JSON file
+        # (or provided dictionary)
         self.cfg = ROAMSConfig(input_file)
 
         ### Output specification
@@ -78,64 +71,10 @@ class ROAMSModel:
         # A dictionary attribute into which output tables will be put before writing
         self.table_outputs = dict()
 
-        # The simulation emissions & production input file
-        self.simmed_emission_file = self.cfg.sim_em_file
-        self.sim_em_col =           self.cfg.sim_em_col
-        self.sim_em_unit =          self.cfg.sim_em_unit
-        self.sim_prod_col =         self.cfg.sim_prod_col
-        self.sim_prod_unit =        self.cfg.sim_prod_unit
-
-        ### Properties of the covered region and its infrastructure
-        # Estimate of covered production in survey region (can be None)
-        self.covered_productivity = CoveredProductionData(
-            covered_production_file =   self.cfg.covered_productivity_file,
-            covered_production_col =    self.cfg.covered_productivity_col,
-            covered_production_unit =   self.cfg.covered_productivity_unit,
-            frac_production_ch4 =       self.cfg.frac_production_ch4,
-            loglevel =                  self.loglevel,
-        )
         # Properties of surveyed infrastructure
-        self.num_wells_to_simulate =self.cfg.num_wells_to_simulate
-        self.well_visit_count =     self.cfg.well_visit_count
-        self.wells_per_site =       self.cfg.wells_per_site
-        
-        # Specification of aerial input data
-        self.plume_file =           self.cfg.plume_file
-        self.source_file =          self.cfg.source_file
-        self.source_id_name =       self.cfg.source_id_name
-        self.aerial_em_col =        self.cfg.aerial_em_col
-        self.aerial_em_unit =       self.cfg.aerial_em_unit
-        self.wind_norm_col =        self.cfg.wind_norm_col
-        self.wind_norm_unit =       self.cfg.wind_norm_unit
-        self.wind_speed_col =       self.cfg.wind_speed_col
-        self.wind_speed_unit =      self.cfg.wind_speed_unit
-        self.cutoff_col =           self.cfg.cutoff_col
-        self.coverage_count =       self.cfg.coverage_count
-        self.asset_col =            self.cfg.asset_col
-        self.prod_asset_type =      self.cfg.prod_asset_type
-        self.midstream_asset_type = self.cfg.midstream_asset_type
-        
-        # Specifications of algorithm behavior
-        self.stratify_sim_sample =          self.cfg.stratify_sim_sample
-        self.n_mc_samples =                 self.cfg.n_mc_samples
-        self.noise_fn =                     self.cfg.noise_fn
-        self.handle_negative =              self.cfg.handle_negative
-        self.prod_transition_point =        self.cfg.prod_transition_point
-        self.midstream_transition_point =   self.cfg.midstream_transition_point
-        self.partial_detection_correction = self.cfg.partial_detection_correction
-        self.simulate_error =               self.cfg.simulate_error
-        self.PoD_fn =                       self.cfg.PoD_fn
-        self.correction_fn =                self.cfg.correction_fn
-
-        if not (
-            self.prod_transition_point==None 
-            or 
-            isinstance(self.prod_transition_point,(int,float))
-        ):
-            raise ValueError(
-                "The `transition_point` argument to the ROAMSModel class can "
-                "only be `None` or a Python-native numerical value."
-            )
+        self.num_wells_to_simulate =    self.cfg.num_wells_to_simulate
+        self.well_visit_count =         self.cfg.well_visit_count
+        self.wells_per_site =           self.cfg.wells_per_site
         
         # Quantiles used in quantification of MC results 
         # (no reason to mess with this)
@@ -156,69 +95,9 @@ class ROAMSModel:
             4. Summarize all the available information, to the degree 
                 specified, into the location specified.
         """
-        self.load_data()
         self.make_samples()
         self.combine_prod_samples()
         self.generate_and_write_outputs()
-
-    def load_data(self):
-        """
-        Load the simulated production data, segregated separately into 
-        simulated emissions and production.
-
-        Load the aerial data, segregated into records of plumes and sources 
-        separately.
-        """
-        self.log.info("Loading simulated and aerial data...")
-        self.read_simulated_prod_data()
-        self.read_aerial_data()
-
-    def read_simulated_prod_data(self, simdataclass : SimulatedProductionAssetData = SimulatedProductionAssetData):
-        """
-        Use a `simdataclass` to make sense of the available simulated 
-        emissions of production emissions and CH4 production rates.
-
-        Save it to `prod_sim_results`, which is intended to be the entrypoint 
-        for unit-converted arrays of results.
-        """
-        self.prod_sim_results = simdataclass(
-            self.simmed_emission_file,
-            emissions_col = self.sim_em_col,
-            emissions_units = self.sim_em_unit,
-            production_col = self.sim_prod_col,
-            production_units = self.sim_prod_unit,
-            loglevel = self.loglevel
-        )
-    
-    def read_aerial_data(self,surveyClass : AerialSurveyData = AerialSurveyData):
-        """
-        Return a tuple of plume and source data, restricted to sources of 
-        the given values in `self.asset_type`.
-
-        Args:
-
-            surveyClass (AerialSurveyData, optional):
-                An optional class (intended to be a child of AerialSurveyData)
-                to be used to parse the aerial plume and source data.
-        """
-        self.survey = surveyClass(
-            self.plume_file,
-            self.source_file,
-            self.source_id_name,
-            em_col = self.aerial_em_col,
-            em_unit = self.aerial_em_unit,
-            wind_norm_col = self.wind_norm_col,
-            wind_norm_unit = self.wind_norm_unit,
-            wind_speed_col = self.wind_speed_col,
-            wind_speed_unit = self.wind_speed_unit,
-            cutoff_col = self.cutoff_col,
-            cutoff_handling = "drop",
-            coverage_count = self.coverage_count,
-            asset_col = self.asset_col,
-            prod_asset_type = self.prod_asset_type,
-            midstream_asset_type = self.midstream_asset_type,
-            loglevel=self.loglevel,
-        )
     
     def make_samples(self):
         """
@@ -261,24 +140,24 @@ class ROAMSModel:
                 A (number of simulated wells)x(number monte-carlo iterations) 
                 table of values. Each value is a simulated emissions value.
         """        
-        if self.stratify_sim_sample:
+        if self.cfg.stratify_sim_sample:
             sub_mdl_dist = stratify_sample(
-                self.prod_sim_results.simulated_emissions,
-                self.prod_sim_results.simulated_production,
-                self.covered_productivity.ng_production_volumetric,
+                self.cfg.prodSimResults.simulated_emissions,
+                self.cfg.prodSimResults.simulated_production,
+                self.cfg.coveredProductivity.ng_production_volumetric,
                 n_infra=self.num_wells_to_simulate
             )
         else:
-            sub_mdl_dist = self.prod_sim_results.simulated_emissions
+            sub_mdl_dist = self.cfg.prodSimResults.simulated_emissions
 
         # Sample the stratified representation for each monte carlo iteration
         self.log.info(
             "Sampling simulated emissions data into a "
-            f"{self.num_wells_to_simulate}x{self.n_mc_samples} table."
+            f"{self.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
         )
         sub_mdl_sample = np.random.choice(
             sub_mdl_dist,
-            (self.num_wells_to_simulate,self.n_mc_samples),
+            (self.num_wells_to_simulate,self.cfg.n_mc_samples),
             replace=True
         )
         sub_mdl_sample.sort(axis=0)
@@ -295,7 +174,7 @@ class ROAMSModel:
             tuple[np.ndarray]: 
                 A 2-tuple of sampled midstream aerial emissions (emissions 
                 sampled for each source) and corresponding wind-normalized 
-                emissions. Each will have self.n_mc_samples columns, and 
+                emissions. Each will have self.cfg.n_mc_samples columns, and 
                 a number of rows equal to the number of unique midstream 
                 sources.
                 The entries in each are aligned, such that the [i,j]th entry 
@@ -317,12 +196,12 @@ class ROAMSModel:
         # Define an addition to the cumulative sum based on the wind-normalized
         # emissions, if the form of the partial detection correction is "add to cumsum"
         # (otherwise maintain the calculation structure, but just use a table of 0s)
-        if self.partial_detection_correction:
+        if self.cfg.partial_detection_correction:
             self.log.info(
-                f"Using {self.PoD_fn} on the sorted wind-normalized sample "
+                f"Using {self.cfg.PoD_fn} on the sorted wind-normalized sample "
                 "of midstream emissions to define the probability of detection."
             )
-            PoD = self.PoD_fn(mid_wind_norm_sample)
+            PoD = self.cfg.PoD_fn(mid_wind_norm_sample)
             extra_emissions_for_cdf = (1/PoD - 1)*mid_aerial_site_sample
         else:
             self.log.info(
@@ -343,7 +222,7 @@ class ROAMSModel:
             tuple[np.ndarray]: 
                 A 2-tuple of sampled production aerial emissions (emissions 
                 sampled for each source) and corresponding wind-normalized 
-                emissions. Each will have self.n_mc_samples columns, and 
+                emissions. Each will have self.cfg.n_mc_samples columns, and 
                 a number of rows equal to the total number of estimated 
                 wells in the region of interest (self.num_wells_to_simulate). 
                 The entries in each are aligned, such that the [i,j]th entry 
@@ -367,10 +246,10 @@ class ROAMSModel:
         # Number of required extra rows to simulate all covered wells
         # (these padding 0s may not be required)
         required_extra_zeros = (
-            self.num_wells_to_simulate 
+            self.cfg.num_wells_to_simulate 
             - prod_aerial_em_sample.shape[0] 
         )
-        padding_zeros = np.zeros((required_extra_zeros,self.n_mc_samples))
+        padding_zeros = np.zeros((required_extra_zeros,self.cfg.n_mc_samples))
         
         # Concatenate the extra samples onto the original draws, with zero padding
         # representing all of the remaining wells up to num_wells_to_simulate
@@ -383,19 +262,19 @@ class ROAMSModel:
         # In this loop, use the same index to sort each of the corresponding tables:
         #   * Sampled aerial emissions
         #   * corresponding wind-normalized emissions
-        for n in range(self.n_mc_samples):
+        for n in range(self.cfg.n_mc_samples):
             tot_aerial_sample[:,n] = tot_aerial_sample[aerial_data_idx[:,n],n]
             tot_windnorm_sample[:,n] = tot_windnorm_sample[aerial_data_idx[:,n],n]
         
         # Define an addition to the cumulative sum based on the wind-normalized
         # emissions, if the form of the partial detection correction is "add to cumsum"
         # (otherwise maintain the calculation structure, but just use a table of 0s)
-        if self.partial_detection_correction:
+        if self.cfg.partial_detection_correction:
             self.log.info(
-                f"Using {self.PoD_fn} on the sorted wind-normalized sample "
+                f"Using {self.cfg.PoD_fn} on the sorted wind-normalized sample "
                 "of production emissions to define the probability of detection."
             )
-            PoD = self.PoD_fn(tot_windnorm_sample)
+            PoD = self.cfg.PoD_fn(tot_windnorm_sample)
             extra_emissions_for_cdf = (1/PoD - 1)*tot_aerial_sample
         else:
             self.log.info(
@@ -420,8 +299,8 @@ class ROAMSModel:
         Args:
             infra (str):
                 One of "production" or "midstream". This string will be used 
-                directly to look up attributes on `self.survey`, in the form 
-                of f"{infra}_plumes", for example.
+                directly to look up attributes on `self.cfg.aerialSurvey`, in 
+                the form of f"{infra}_plumes", for example.
 
         Returns:
             tuple:
@@ -434,22 +313,22 @@ class ROAMSModel:
                 will not be altered in any way from their original.
         """
         # Define sources and plumes tables for this infrastructure
-        infra_sources = getattr(self.survey,f"{infra}_sources")
-        infra_plumes = getattr(self.survey,f"{infra}_plumes")
+        infra_sources = getattr(self.cfg.aerialSurvey,f"{infra}_sources")
+        infra_plumes = getattr(self.cfg.aerialSurvey,f"{infra}_plumes")
 
         # Define emissions and wind-normalized emissions
-        infra_em = getattr(self.survey,f"{infra}_plume_emissions")
-        infra_windnorm = getattr(self.survey,f"{infra}_plume_wind_norm")
+        infra_em = getattr(self.cfg.aerialSurvey,f"{infra}_plume_emissions")
+        infra_windnorm = getattr(self.cfg.aerialSurvey,f"{infra}_plume_wind_norm")
         
         # max_count = maximum number of coverages
-        max_count = infra_sources[self.survey.coverage_count].max()
+        max_count = infra_sources[self.cfg.aerialSurvey.coverage_count].max()
         
         # df = DataFrame with columns [0, 1, ..., <max coverage - 1>, "coverage_count"]
         # and a number of rows equal to the number of unique sources.
         df = infra_sources[
-            [self.survey.source_id_col,self.survey.coverage_count]
+            [self.cfg.aerialSurvey.source_id_col,self.cfg.aerialSurvey.coverage_count]
         ].copy()
-        df.set_index(self.survey.source_id_col,inplace=True)
+        df.set_index(self.cfg.aerialSurvey.source_id_col,inplace=True)
 
         plume_data = infra_plumes.copy()
         
@@ -462,7 +341,7 @@ class ROAMSModel:
         # get separate lists of the observed wind-normalized emissions rates and wind speeds
         emiss_and_windnorm_emiss = (
             plume_data
-            .groupby(self.survey.source_id_col)
+            .groupby(self.cfg.aerialSurvey.source_id_col)
             [["em","windnorm_em"]]
             .agg(list)
         )
@@ -488,20 +367,20 @@ class ROAMSModel:
             self.log.debug(
                 f"Source plume number {col+1} was covered and emitting for "
                 f"{(~df[col].isna()).sum()} plumes. It was covered but not "
-                f"emitting for {((df[self.survey.coverage_count]>col) & (df[col].isna())).sum()} plumes. "
+                f"emitting for {((df[self.cfg.aerialSurvey.coverage_count]>col) & (df[col].isna())).sum()} plumes. "
                 "The remainder were not covered."
             )
             # For any observations remaining nan that should still count as coverage instance, set them to 0 (i.e., it was observed and was not emitting)
-            df.loc[(df[self.survey.coverage_count]>col) & (df[col].isna()),col] = 0
+            df.loc[(df[self.cfg.aerialSurvey.coverage_count]>col) & (df[col].isna()),col] = 0
         
         # Drop the coverage_count column, no longer needed
-        df.drop(columns=self.survey.coverage_count,inplace=True)
+        df.drop(columns=self.cfg.aerialSurvey.coverage_count,inplace=True)
 
         # Sample each row N times, excluding NaN values
         # This results in an `emission_source_id`-indexed series whose values are each a 1D np.array type, each representing the sampled observations
         # The values in the sampled 1-D array can be 0 (no emissions observed), or a (wind-normalized emissions, wind speed) pair.
         sample = df.apply(
-            lambda row: row.sample(self.n_mc_samples,replace=True,weights=1*(~row.isna())).values,
+            lambda row: row.sample(self.cfg.n_mc_samples,replace=True,weights=1*(~row.isna())).values,
             axis=1
         )
 
@@ -520,17 +399,17 @@ class ROAMSModel:
         )
 
         # Apply given correction, if not None
-        if self.correction_fn is not None:
+        if self.cfg.correction_fn is not None:
             self.log.debug(
-                f"Applying {self.correction_fn} to sampled {infra} emissions"
+                f"Applying {self.cfg.correction_fn} to sampled {infra} emissions"
             )
-            emissions = self.correction_fn(emissions)
+            emissions = self.cfg.correction_fn(emissions)
 
-        if self.simulate_error:
+        if self.cfg.simulate_error:
             self.log.debug(
-                f"Applying {self.simulate_error} to sampled {infra} emissions"
+                f"Applying {self.cfg.simulate_error} to sampled {infra} emissions"
             )
-            emissions = self.noise_fn(emissions)
+            emissions = self.cfg.noise_fn(emissions)
         
         # Use function to handle 0s
         self.log.debug(
@@ -538,7 +417,7 @@ class ROAMSModel:
             f"{(emissions<=0).sum(axis=0).mean()} values ≤0 in each "
             "monte-carlo iteration."
         )
-        emissions = self.handle_negative(emissions)
+        emissions = self.cfg.handle_negative(emissions)
 
         return emissions, wind_normalized_em
     
@@ -546,23 +425,23 @@ class ROAMSModel:
         """
         Combine the aerial and simulated distributions into a new attribute 
         called `self.combined_samples` which will have self.num_wells_to_simulate
-        rows and self.n_mc_samples columns.
+        rows and self.cfg.n_mc_samples columns.
           
         It creates this with aerial sampled data, partial detection emissions, 
         and sampled simulated emissions. By the time of calling this method, 
         these should be in the form of:
             
             * `self.prod_tot_aerial_sample` : 
-                A (self.num_wells_to_simulate)x(self.n_mc_samples) table of 
+                A (self.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
                 sampled, corrected, and perhaps noised aerial observations,
                 where intermittency has also been taken into account.
             * `self.prod_partial_detection_emissions` : 
-                A (self.num_wells_to_simulate)x(self.n_mc_samples) table of 
+                A (self.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
                 estimated extra emissions from the entire basin under study, 
                 intended to reflect the "missed" emissions from the partial 
                 detection correction.
             * `self.simulated_sample` : 
-                A (self.num_wells_to_simulate)x(self.n_mc_samples) table of 
+                A (self.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
                 sampled simulated emissions, which should have already been 
                 stratified if relevant.
 
@@ -583,7 +462,7 @@ class ROAMSModel:
 
         Lastly, the resulting combined distributions are sorted ascending.
         """
-        if self.prod_transition_point is None:
+        if self.cfg.prod_transition_point is None:
             self.log.info(
                 "No transition point was provided, it will be computed by "
                 "comparing the simulated and aerial distributions."
@@ -613,20 +492,20 @@ class ROAMSModel:
             self.log.debug(
                 f"The computed average transition point is {self.prod_tp.mean()}"
             )
-        elif isinstance(self.prod_transition_point,(int,float,)):
+        elif isinstance(self.cfg.prod_transition_point,(int,float,)):
             self.log.info(
-                f"The transition point was provided as {self.prod_transition_point}, "
+                f"The transition point was provided as {self.cfg.prod_transition_point}, "
                 "and will be used directly to combine aerial and simulated "
                 "emissions distributions."
             )
-            self.prod_tp = np.array([self.prod_transition_point]*self.n_mc_samples)
+            self.prod_tp = np.array([self.cfg.prod_transition_point]*self.cfg.n_mc_samples)
 
         # To start the process, define `self.combined_samples` as the aerial sample.
         # This is the desired shape, and some of the values are already what we want.
         self.combined_samples = self.prod_tot_aerial_sample.copy()
 
         # Now go through each monte carlo iteration and combine the samples.
-        for n in range(self.n_mc_samples):
+        for n in range(self.cfg.n_mc_samples):
             
             # Get the transition point for this MC run
             tp = self.prod_tp[n]
@@ -662,7 +541,7 @@ class ROAMSModel:
         # partial detection correction by getting the sorted index and using
         # for both.
         combined_sort_idx = self.combined_samples.argsort(axis=0)
-        for n in range(self.n_mc_samples):
+        for n in range(self.cfg.n_mc_samples):
             # Sort the combined samples column-wise
             self.combined_samples[:,n] = self.combined_samples[combined_sort_idx[:,n],n]
 
@@ -706,7 +585,7 @@ class ROAMSModel:
         self.make_prod_distr_summary()
 
         # If covered_productivity exists, summarize fractional loss
-        if self.covered_productivity is not None:
+        if self.cfg.coveredProductivity is not None:
             self.make_fractional_loss()
 
         if self.save_mean_dist:
@@ -724,8 +603,8 @@ class ROAMSModel:
         })
 
         # Fill with a single value: total covered volumetric productivity of CH4
-        result[f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})"] = self.covered_productivity.ch4_production_volumetric.sum()
-        result[f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})"] = self.covered_productivity.ch4_production_mass.sum()
+        result[f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})"] = self.cfg.coveredProductivity.ch4_production_volumetric.sum()
+        result[f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})"] = self.cfg.coveredProductivity.ch4_production_mass.sum()
         
         # Volumetric fractional loss = [combined distribution total emissions rate] / [covered productivity production rate]
         result[f"Mean fractional CH4 Loss ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)"] = (
@@ -733,7 +612,7 @@ class ROAMSModel:
                 self.combined_samples.sum(axis=0).mean() 
                 + self.prod_partial_detection_emissions.sum(axis=0).mean()
             )
-            /self.covered_productivity.ch4_production_mass.sum()
+            /self.cfg.coveredProductivity.ch4_production_mass.sum()
         )
 
         self.table_outputs["Fractional Loss Summary"] = result
@@ -769,7 +648,7 @@ class ROAMSModel:
         prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_aerial)[quantity_cols].values
 
         # Report sampled aerial emissions distributions above transition point
-        sum_emiss_aerial_abovetp = np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(self.n_mc_samples)])/1e3
+        sum_emiss_aerial_abovetp = np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
         prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aerial_abovetp)[quantity_cols].values
 
         # In this addition, the expectation is the only one or other is contributing to the sum
@@ -781,7 +660,7 @@ class ROAMSModel:
         prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_aer_comb)[quantity_cols].values
 
         # This will be aerial+partial detection, but ONLY total contributions above each transition point
-        sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + np.array([self.prod_partial_detection_emissions[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(self.n_mc_samples)])/1e3
+        sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + np.array([self.prod_partial_detection_emissions[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
         prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aer_comb_abovetp)[quantity_cols].values
         
         # The total amount of simulated emissions
@@ -789,7 +668,7 @@ class ROAMSModel:
         prod_summary.loc[f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_sim)[quantity_cols].values
 
         # The total amount of simulated emissions below transition point, that end up being coounted in the resulting distribution.
-        sum_emiss_sim_belowtp = np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(self.n_mc_samples)])/1e3
+        sum_emiss_sim_belowtp = np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
         prod_summary.loc[f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_sim_belowtp)[quantity_cols].values
         
         # Report from total combined distribution: only "By Itself" (doesn't make sense to 'account for transition point' in combined distribution)

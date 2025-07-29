@@ -9,18 +9,22 @@ FAKE_INPUT_FILE = os.path.join(TEST_DIR,"_fake_input.json")
 
 from roams.input import ROAMSConfig
 
+from roams.tests.test_aerialinput import SOURCE_FILE, PLUME_FILE
+from roams.tests.test_siminput import SIM_FILE
+from roams.tests.test_coveredprodinput import COVERED_PROD_FILE
+
 TEST_CONFIG = {
-    "sim_em_file" : "path/to/simulated/production.csv",
-    "sim_em_col" : "sim_emissions",
+    "sim_em_file" : SIM_FILE,
+    "sim_em_col" : "emissions",
     "sim_em_unit" : "kgh",
-    "sim_prod_col" : "sim_prod",
+    "sim_prod_col" : "production",
     "sim_prod_unit" : "mscf/hr",
-    "plume_file" : "path/to/plume_file.csv",
-    "source_file" : "path/to/source_file.csv",
+    "plume_file" : PLUME_FILE,
+    "source_file" : SOURCE_FILE,
     "source_id_name" : "source_id",
     "asset_col" : "asset_type",
-    "prod_asset_type" : ("prod"),
-    "midstream_asset_type" : ("midstream"),
+    "prod_asset_type" : ("prod",),
+    "midstream_asset_type" : ("midstream",),
     "coverage_count" : "coverage_count",
     "aerial_em_col" : None,
     "aerial_em_unit" : None,
@@ -29,9 +33,9 @@ TEST_CONFIG = {
     "wind_speed_col" : "windspeed",
     "wind_speed_unit" : "mps",
     "cutoff_col" : "cutoff",
-    "covered_productivity_file" : "path/to/covered/production.csv",
-    "covered_productivity_col" : "production",
-    "covered_productivity_unit" : "mscf/d",
+    "covered_productivity_file" : COVERED_PROD_FILE,
+    "covered_productivity_col" : "estimated productivity (mscf/day)",
+    "covered_productivity_unit" : "mscf/day",
     "num_wells_to_simulate" : 1000,
     "well_visit_count" : 1_000_000_000,
     "wells_per_site" : 3.14159,

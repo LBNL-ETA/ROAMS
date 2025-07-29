@@ -9,6 +9,10 @@ from roams.constants import ALVAREZ_ET_AL_CH4_FRAC
 import roams.aerial.partial_detection
 import roams.aerial.assumptions
 
+from roams.aerial.input import AerialSurveyData
+from roams.simulated.input import SimulatedProductionAssetData
+from roams.production.input import CoveredProductionData
+
 # This constant controls what missing keys in an input file will raise an error.
 # All highest-level keys, and listed keys within, have to exist.
 # It also controls what types each input has to be.
@@ -78,10 +82,24 @@ _DEFAULT_CONFIGS = {
 class ROAMSConfig:
     """
     The ROAMSConfig class is intended to handle the parsing, typing, 
-    default behavior, and error-raising of the ROAMS input specification.
+    default behavior, and error-raising of all the ROAMS input specification.
 
-    The input is intended to come in the form of a nested dictionary (handed 
-    over directly in memory, or in a JSON file).
+    The ROAMSConfig will go through the following steps:
+        * Read the content of the `config` (if a file) into dictionary format
+        * Assert that each key in `_reqs` exists in the dictionary
+        * Assert that each value type in `reqs` matches the value type in `config`
+        * Assign defaults from `_def` into `config` if they aren't there or 
+            are `None`.
+        * Assign each resulting key: value pair to a class attribute, whose 
+            name is the dictionary key.
+        * Call `self.default_input_behavior` to do some after-the-fact 
+            application of slightly more complicated default opinions.
+        * Assign a `coveredProductivity` attribute based on provided 
+            covered productivity data.
+        * Assign a `prodSimResults` attribute based on provided simulated 
+            data inputs.
+        * Assign a `aerialSurvey` attribute based on provided aerial survey 
+            data inputs.
 
     See the root-level README for a description of what should be in the 
     input file.
@@ -90,7 +108,10 @@ class ROAMSConfig:
             self,
             config : str | dict,
             _reqs : dict = _REQUIRED_CONFIGS,
-            _def : dict = _DEFAULT_CONFIGS
+            _def : dict = _DEFAULT_CONFIGS,
+            coveredProdDataClass : CoveredProductionData = CoveredProductionData,
+            simDataClass : SimulatedProductionAssetData = SimulatedProductionAssetData,
+            surveyClass : AerialSurveyData = AerialSurveyData,
         ):
         """
         The config_dict is passed directly to the __init__ of the parent 
@@ -106,6 +127,10 @@ class ROAMSConfig:
         the function in the hope that future developers won't have such a 
         difficult time altering the otherwise strict parsing behavior, should 
         they need to do the same thing for similar but different models.
+
+        This method will also instantiate `coveredProductivity`, 
+        `prodSimResults`, and `aerialSurvey` attributes based on provided 
+        parsing classes in order to make sense 
 
         Args:
             config_dict (str | dict): 
@@ -125,6 +150,26 @@ class ROAMSConfig:
                 default values of missing but optional attributes.
                 Defaults to _DEFAULT_CONFIGS.
 
+            coveredProdDataClass (CoveredProductionData, optional): 
+                A class that is either `CoveredProductionData` or a child 
+                class thereof. Intended to serve as an entrypoint for 
+                the estimated covered production data for the actual analysis 
+                logic.
+                Defaults to CoveredProductionData.
+            
+            simDataClass (SimulatedProductionAssetData, optional):
+                A class that is either `SimulatedProductionAssetData` or a 
+                child class thereof. Intended to serve as an entrypoint to 
+                the simulated production asseet data for the actual analysis 
+                logic.
+                Defaults to SimulatedProductionAssetData.
+
+            aerialSurveyClass (AerialSurveyData, optional):
+                A class that is either `AerialSurveyData` or a child class
+                thereof. Intended to serve as an entrypoint to the aerial 
+                survey data for the actual analysis logic.
+                Defaults to AerialSurveyData.
+
         Raises:
             KeyError:
                 When a required part of the input specification is missing.
@@ -134,6 +179,7 @@ class ROAMSConfig:
         """
         # Convert config_dict to dictionary if it's a string
         if isinstance(config,str):
+            log.info(f"Reading the input configuration from: {config}")
             with open(config,"r") as f:
                 config = json.load(f)
                 
@@ -177,8 +223,71 @@ class ROAMSConfig:
                     "Did you misspecify an input value?"
                 )
 
-        ### Do some after-the-fact assignment with specific behaviors
-            
+        # Do some after-the-fact assignment with specific behaviors   
+        self.default_input_behavior()
+
+        # Load the covered productivity data, if a file is given 
+        # (otherwise assign None - it's up to analysis code to care about 
+        # whether or not this is provided).
+        if self.covered_productivity_file is not None:
+            self.coveredProductivity = coveredProdDataClass(
+                covered_production_file = self.covered_productivity_file,
+                covered_production_col = self.covered_productivity_col,
+                covered_production_unit = self.covered_productivity_unit,
+                frac_production_ch4 = self.frac_production_ch4,
+                loglevel = self.loglevel,
+            )
+        else:
+            self.coveredProductivity = None
+        
+        # Load the simulated production data
+        self.prodSimResults = simDataClass(
+            self.sim_em_file,
+            emissions_col = self.sim_em_col,
+            emissions_units = self.sim_em_unit,
+            production_col = self.sim_prod_col,
+            production_units = self.sim_prod_unit,
+            loglevel = self.loglevel
+        )
+        
+        # Load the aerial survey data
+        self.aerialSurvey = surveyClass(
+            self.plume_file,
+            self.source_file,
+            self.source_id_name,
+            em_col = self.aerial_em_col,
+            em_unit = self.aerial_em_unit,
+            wind_norm_col = self.wind_norm_col,
+            wind_norm_unit = self.wind_norm_unit,
+            wind_speed_col = self.wind_speed_col,
+            wind_speed_unit = self.wind_speed_unit,
+            cutoff_col = self.cutoff_col,
+            cutoff_handling = "drop",
+            coverage_count = self.coverage_count,
+            asset_col = self.asset_col,
+            prod_asset_type = self.prod_asset_type,
+            midstream_asset_type = self.midstream_asset_type,
+            loglevel = self.loglevel,
+        )
+
+    def default_input_behavior(self):
+        """
+        This method applies slightly more complicated logic to assign 
+        attributes based on whether given arguments are default.
+        
+        For `foldername` and `loglevel`, it assigns defaults if the given 
+        value is `None`.
+            * `foldername` -> gets timestamp
+            * `loglevel` -> logging.INFO
+
+        For `PoD_fn`, it overwrites the attribute with the function whose 
+        name matches the given string in the `roams.aerial.partial_detection` 
+        submodule.
+
+        For `correction_fn`, `noise_fn`, and `handle_negative`, this method 
+        will overwrite the attribute with the function whose name matches the 
+        given string in the `roams.aerial.assumptions` submodule.
+        """
         # If foldername is None: provide a timestamp
         if self.foldername is None:
             # E.g. foldername = "1 Jan 2000 01-23-45"

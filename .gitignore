@@ -196,6 +196,7 @@ cython_debug/
 # Tabular inputs and Outputs of the code
 *.csv
 *.xlsx
+*.json
 
 # Plots made in outputs
 *.png

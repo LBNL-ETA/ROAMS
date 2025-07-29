@@ -36,6 +36,17 @@ class CoveredProductionData:
             The level to which information should be logged as this code 
             is called.
             Defaults to logging.INFO
+
+    Raises:
+        ValueError:
+            When the given `frac_production_ch4` is not a number that's at 
+            least 0 and at most 1.
+        
+        KeyError:
+            When the `covered_production_col` isn't in the provided data.
+        
+        ValueError:
+            When the user didn't provide units of covered production.
     """
     def __init__(
         self,
@@ -56,6 +67,11 @@ class CoveredProductionData:
         self._raw_covered_prod = pd.read_csv(self.covered_production_file)
         self.log.debug(f"Raw simulated data has shape = {self._raw_covered_prod.shape}")
 
+        if not isinstance(frac_production_ch4,(float,int)) or (not 0<=frac_production_ch4<=1):
+            raise ValueError(
+                f"{frac_production_ch4 = } should be a value from 0 through 1."
+            )
+        
         self.frac_production_ch4 = frac_production_ch4
         self.log.info(
             f"Assuming that {(100*frac_production_ch4):.2f}% of produced "
