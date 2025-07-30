@@ -35,13 +35,37 @@ if __name__=="__main__":
 
 After calling `perform_analysis()`, the model that's ran will produce a folder in `run_results/` of the repository, named by the `foldername` specified in the input file. If the folder already existed, the content will be overwritten.
 
+To get started with creating your own input file, read the [input file structure section](#input-file-format)
+
 ## Structure
 
+The code that executes the model is supposed to be separated into three distinct "layers": the input layer, the processing layer, and the output layer. 
+
+The input layer concerns itself with units, column names, and table structures. By caring about these things, it allows the processing layer to only care about the algorithm.
+
+The processing layer implements the true logic of the ROAMS model, and is primarily concerned only with the algorithmic logic.
+
+The output layer is supposed to make human-readable results that are important to users.
+
+### Input Layer
+
+The input "layer" is responsible for not only reading the input file and applying default behavior, but instantiating specialized classes that wrap around the data in given input files. These classes hold accessible properties intended to serve as a source of truth for important information contained in the data.
+
+For example, the `roams.aerial.input.AerialSurveyData` class has a `production_plume_emissions` property that returns the emissions values from all production-associated plumes in fixed units.
+
+The input layer is embodied by `roams.input.ROAMSConfig`, which is used to read the input file. This class is instantiated with an input file (or the content of the dictionary embodied therein), and uses classes defined in the `input` submodules to wrap around the given input data.
+
+### Processing Layer
+
+The processing "layer" is embodied in the `perform_analysis` method of the `roams.model.ROAMSModel` class. In this layer the simulated and aerial production distributions are created the put together for each monte-carlo iteration. The midstream aerial emissions are sampled and combined with derived GHGI-based estimates.
+
+### Output Layer (in development)
+
+The output "layer" is supposed to be responsible for making human-readable summaries, plots, or more highly derived information based on what was computed. This is currently embodied by the `generate_and_write_results` method of the `roams.model.ROAMSModel` class.
 
 ## Input file format
 
-The code is capable of of reading a JSON input file, which holds a nested dictionary structure. Here is an illustrative (and nonfunctional) input file, with text to help describe what each entry is and how it's treated. When reading JSON files, `null` will become `None` in python, and the booleans `true/false` become `True/False`.
-
+The code is capable of of reading a JSON input file, which holds a simple flat dictionary structure. Here's a table that describes the keys of this flat dictionary input structure. Note that when reading JSON files, `null` will become `None` in python, and the booleans `true/false` become `True/False`.
 
 | Field | Usage | Example |
 |---|---|---|
