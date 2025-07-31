@@ -7,9 +7,9 @@ from roams.conf import REPO_DIR
 
 DUMMY_DATA_FOLDER = os.path.join(REPO_DIR,"data","dummy")
 
-SIMULATED_PROD_FILENAME = os.path.join(DUMMY_DATA_FOLDER,"simulated_prod_less.csv")
-PLUME_FILENAME = os.path.join(DUMMY_DATA_FOLDER,"plumes_less.csv")
-SOURCE_FILENAME = os.path.join(DUMMY_DATA_FOLDER,"sources_less.csv")
+SIMULATED_PROD_FILENAME = os.path.join(DUMMY_DATA_FOLDER,"simulated_prod.csv")
+PLUME_FILENAME = os.path.join(DUMMY_DATA_FOLDER,"plumes.csv")
+SOURCE_FILENAME = os.path.join(DUMMY_DATA_FOLDER,"sources.csv")
 
 DUMMY_INPUT = {
         "sim_em_file" : SIMULATED_PROD_FILENAME,
