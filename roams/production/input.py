@@ -146,6 +146,6 @@ class CoveredProductionData:
         """
         return ch4_volume_to_mass(
             self.ch4_production_volumetric,
-            self.covered_production_unit,
+            COMMON_PRODUCTION_UNITS,
             COMMON_EMISSIONS_UNITS
         )

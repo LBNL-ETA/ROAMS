@@ -17,7 +17,7 @@ EMISSION_RATE_CONVERSIONS = {
     "kg/h"  : 1,
     "kg/hr" : 1,
     "kgh"   : 1,
-    "kg/d"  : 24,
+    "kg/d"  : 24, # e.g. 1kgh = 24 kg/d
     "kg/day": 24,
     "t/h"   : 1e-3,
     "tons/h": 1e-3,
@@ -42,7 +42,7 @@ WINDSPEED_CONVERSIONS = {
 PRODUCTION_CONVERSIONS = {
     "mscf/day"  : 1,
     "mscf/d"    : 1,
-    "mscf/h"    : 1/24,
+    "mscf/h"    : 1/24, # e.g. 1 mscf/day = 1/24 mscf/h
     "mscf/hr"   : 1/24,
     "scf/d"     : 1e3,
     "scf/h"     : 1e3/24,
@@ -121,9 +121,11 @@ def ch4_volume_to_mass(value, unit_in : str, unit_out : str):
             E.g. "kg/hr"
     """
     unit_in, unit_out = unit_in.lower(), unit_out.lower()
+    
+    # E.g. vol, t_in = "mscf", "day"
     vol, t_in = unit_in.split("/")
     
-    # Based on the numerator (volume)
+    # Based on the volume unit, convert to kg with density
     if vol=="m3":
         kg = CH4_DENSITY_KGM3 * value
     elif vol=="mscf":
@@ -139,4 +141,5 @@ def ch4_volume_to_mass(value, unit_in : str, unit_out : str):
             "accommodate this, or try a unit like 'mscf/d', 'm3/h'."
         )
 
+    # Return the converted emissions rate from kg/<time in> to unit_out
     return convert_units(kg,f"kg/{t_in}",unit_out)
