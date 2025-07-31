@@ -2,23 +2,6 @@ import logging
 
 from roams.model import ROAMSModel
 
-COVERED_PRODUCTIVITY_FILE = "/Users/eneill/repos/ROAMS/data/production/Covered_gas_prod_percentiles_all_basins_by_well_Kairos_NM_Permian20221021.csv"
-SUB_MDL_FILENAME = "/Users/eneill/repos/ROAMS/data/Rutherford_million_samples_PERMIAN_20220917.csv" # <- Used in Analytica
-# SUB_MDL_FILENAME = "/Users/eneill/repos/ROAMS/data/Stanford_Modeling_Results_20220822.xlsx" # <- Used by Ross
-
-# This is the permian plume/source data Ross was using, which is maybe more recent than Analytica
-# KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/stanford_nm_data_2021/plume_table.csv"
-# KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/stanford_nm_data_2021/emission_source_table.csv"
-
-# This is the permian "well" plume data ripped out of analytica, with spoofed source data that describes everything as wells
-# (i.e. only the production subset of the data Analytica was using)
-KAIROS_PERMIAN_PLUME_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/plume_table_allsources.csv"
-KAIROS_PERMIAN_EMISSIONS_FILENAME = "/Users/eneill/repos/ROAMS/data/analytica_permian_data/permian_sources_allsources.csv"
-
-# This is all the permian data being used by Analytica described as "Kairos Permian", but ONLY the first plumes
-# KAIROS_PERMIAN_PLUME_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/plumes_20250702.csv'
-# KAIROS_PERMIAN_EMISSIONS_FILENAME = '/Users/eneill/repos/ROAMS/data/no random noise data/sources_20250702.csv'
-
 if __name__=="__main__":
     log = logging.getLogger("run_nm_permian")
     log.setLevel(logging.INFO)

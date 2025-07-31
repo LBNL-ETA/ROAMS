@@ -32,9 +32,6 @@ _REQUIRED_CONFIGS = {
     "coverage_count" : str,
         
     # Attributes of covered region (not derived here)
-    "covered_productivity_file" : str,
-    "covered_productivity_col" : str,
-    "covered_productivity_unit" : str,
     "num_wells_to_simulate" : int,
     "well_visit_count" : int,
     "wells_per_site" : float,
@@ -49,6 +46,11 @@ _DEFAULT_CONFIGS = {
     # Name of production column and unit in simulated data defaults
     "sim_prod_col" : None,
     "sim_prod_unit" : None,
+
+    # Covered productivity attributes
+    "covered_productivity_file" : None,
+    "covered_productivity_col" : None,
+    "covered_productivity_unit" : None,
 
     # Aerial emissions and data specification defaults
     "aerial_em_col" : None,
