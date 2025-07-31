@@ -87,12 +87,11 @@ class ROAMSModel:
 
         It will:
             
-            1. Load simulated production data and aerial survey data
-            2. Perform sampling operations to create samples of aerial and 
+            1. Perform sampling operations to create samples of aerial and 
                 simulated data for each monte carlo iteration.
-            3. Use the ROAMS methodology to combine the simulated and aerial 
+            2. Use the ROAMS methodology to combine the simulated and aerial 
                 production data.
-            4. Summarize all the available information, to the degree 
+            3. Summarize all the available information, to the degree 
                 specified, into the location specified.
         """
         self.make_samples()
