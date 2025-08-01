@@ -13,3 +13,7 @@ COMMON_PRODUCTION_UNITS = "mscf/day"
 
 # Fraction of Methane in produced NG: estimate
 ALVAREZ_ET_AL_CH4_FRAC = .9
+
+# CO2 equivalent warming potential of CH4
+# (Per IPCC AR4, was revised higher in later estimates)
+GWP_CH4 = 25.

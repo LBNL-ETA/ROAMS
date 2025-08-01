@@ -1,15 +1,28 @@
 # 1 meter per second = 2.23694 miles per hour
-MPS_TO_MPH = 2.23694
-M3_TO_CUFT = 35.3147
+MPH_PER_MPS = 2.23694
+
+# 35.3147 cubic feet = 1 cubic meter
+CUFT_PER_M3 = 35.3147
 
 # Methane density at 1 atm and 25C, in kg/m3 and kg/cuft
 CH4_DENSITY_KGM3 = 0.657
-CH4_DENSITY_KGCUFT = CH4_DENSITY_KGM3 / M3_TO_CUFT # .657 kg/m3 * [1 m3 / 35.3147 cuft] = .0186 kg/cuft
+CH4_DENSITY_KGCUFT = CH4_DENSITY_KGM3 / CUFT_PER_M3 # .657 kg/m3 * [1 m3 / 35.3147 cuft] = .0186 kg/cuft
 
 # A dictionary of unit : conversion to kg/h, where each dictionary value 
 # represents the amount of that unit in one kg/h. The unit of tons here is 
 # always metric.
 EMISSION_RATE_CONVERSIONS = {
+    "mmt/yr"      : .000008766, # 1kgh = .000008766 t/yr
+    "mmt/year"    : .000008766,
+    "kt/yr"      : .008766, # 1kgh = .008766 t/yr
+    "kt/year"    : .008766,
+    "t/yr"      : 8.766, # 1kgh = 8.766 t/yr
+    "t/year"    : 8.766,
+    "ton/year"  : 8.766,
+    "tons/year" : 8.766,
+    "tons/yr"   : 8.766,
+    "kg/yr"  : 8766, # 1kgh = 8676 kg/yr
+    "kg/year": 8766,
     "g/h"   : 1_000,
     "g/hr"  : 1_000,
     "g/d"   : 24*1_000,
@@ -32,24 +45,30 @@ EMISSION_RATE_CONVERSIONS = {
 WINDSPEED_CONVERSIONS = {
     "mps"   : 1,
     "m/s"   : 1,
-    "mph"   : MPS_TO_MPH,
-    "m/h"   : MPS_TO_MPH,
-    "mi/h"  : MPS_TO_MPH,
+    "mph"   : MPH_PER_MPS,
+    "m/h"   : MPH_PER_MPS,
+    "mi/h"  : MPH_PER_MPS,
 }
 
 # A dictionary of unit : conversion to mscf/day, where each dictionary value 
 # represents its conversion to mscf/d (e.g. 1 mscf/d is how many of X)
 PRODUCTION_CONVERSIONS = {
+    "mcf/y"     : 365.25, # E.g. 1 mscf/day = 365.25 mscf/yr
+    "mcf/yr"    : 365.25,
+    "mcf/year"  : 365.25,
+    "mscf/y"    : 365.25,
+    "mscf/yr"   : 365.25,
+    "mscf/year" : 365.25,
     "mscf/day"  : 1,
     "mscf/d"    : 1,
     "mscf/h"    : 1/24, # e.g. 1 mscf/day = 1/24 mscf/h
     "mscf/hr"   : 1/24,
     "scf/d"     : 1e3,
     "scf/h"     : 1e3/24,
-    "m3/hr"     : 1e3/M3_TO_CUFT/24,
-    "m3/h"      : 1e3/M3_TO_CUFT/24,
-    "m3/day"    : 1e3/M3_TO_CUFT,
-    "m3/d"      : 1e3/M3_TO_CUFT,
+    "m3/hr"     : 1e3/CUFT_PER_M3/24,
+    "m3/h"      : 1e3/CUFT_PER_M3/24,
+    "m3/day"    : 1e3/CUFT_PER_M3,
+    "m3/d"      : 1e3/CUFT_PER_M3,
 }
 
 def convert_units(value,unit_in : str,unit_out: str):
@@ -128,7 +147,7 @@ def ch4_volume_to_mass(value, unit_in : str, unit_out : str):
     # Based on the volume unit, convert to kg with density
     if vol=="m3":
         kg = CH4_DENSITY_KGM3 * value
-    elif vol=="mscf":
+    elif vol=="mscf" or vol=="mcf":
         kg = CH4_DENSITY_KGCUFT * value * 1000
     elif vol=="cuft":
         kg = CH4_DENSITY_KGCUFT * value
