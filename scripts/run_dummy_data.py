@@ -38,6 +38,7 @@ DUMMY_INPUT = {
         "num_wells_to_simulate" : 1000,
         "well_visit_count" : 500,
         "wells_per_site" : 2.,
+        "random_seed": 1,
         "stratify_sim_sample" : False,
         "n_mc_samples" : 100,
         "prod_transition_point" : None,

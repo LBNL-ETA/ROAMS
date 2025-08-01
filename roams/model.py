@@ -71,6 +71,10 @@ class ROAMSModel:
         # A dictionary attribute into which output tables will be put before writing
         self.table_outputs = dict()
 
+        # Set random numpy seed
+        self.log.debug(f"Setting the seed as {self.cfg.random_seed = }")
+        np.random.seed(self.cfg.random_seed)
+
         # Properties of surveyed infrastructure
         self.num_wells_to_simulate =    self.cfg.num_wells_to_simulate
         self.well_visit_count =         self.cfg.well_visit_count

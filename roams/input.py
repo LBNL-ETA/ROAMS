@@ -63,6 +63,7 @@ _DEFAULT_CONFIGS = {
 
     # Algorithmic input defaults
     # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
+    "random_seed" : None,
     "frac_production_ch4" : ALVAREZ_ET_AL_CH4_FRAC,
     "stratify_sim_sample" : True,
     "n_mc_samples" : 100,
