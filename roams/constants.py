@@ -14,6 +14,11 @@ COMMON_PRODUCTION_UNITS = "mscf/day"
 # Fraction of Methane in produced NG: estimate
 ALVAREZ_ET_AL_CH4_FRAC = .9
 
+# Assumed density of gaseous CH4, kgCH4/mcfCH4
+# NOTE: This differs form the effective assumption made in Analytica, which is 19.25 (~18/.935)
+# CH4_DENSITY_KGMCF = 19.1773453
+CH4_DENSITY_KGMCF = 18/.935
+
 # CO2 equivalent warming potential of CH4
 # (Per IPCC AR4, was revised higher in later estimates)
 GWP_CH4 = 25.
