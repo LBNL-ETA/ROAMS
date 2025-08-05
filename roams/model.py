@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 
 import pandas as pd
 import numpy as np
@@ -563,6 +564,9 @@ class ROAMSModel:
         if not os.path.exists(self.outfolder):
             os.mkdir(self.outfolder)
 
+        # Save the input configs that were used for this run
+        self.save_config()
+        
         # Call methods that add content to self.table_outputs
         self.make_tabular_outputs()
 
@@ -576,6 +580,19 @@ class ROAMSModel:
         
         self.gen_plots()
 
+    def save_config(self):
+        """
+        Save the dictionary representation of the config as a json file 
+        into the output. This is supposed to include all of the parsed 
+        default behavior, as well as what was specified in the input file.
+        """
+        config = self.cfg.to_dict()
+        path = os.path.join(self.outfolder,"used_config.json")
+        
+        self.log.info(f"Saving used config options to {path}.")
+        with open(path,"w") as f:
+            json.dump(config,f)
+    
     def make_tabular_outputs(self):
         """
         Call methods to add tabular (pd.DataFrame) outputs to self.table_outputs.

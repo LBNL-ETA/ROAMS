@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Callable
 
 log = logging.getLogger("roams.input.ROAMSConfig")
 
@@ -226,6 +226,8 @@ class ROAMSConfig:
                     "Did you misspecify an input value?"
                 )
 
+        self._config = config.copy()
+        
         # Do some after-the-fact assignment with specific behaviors   
         self.default_input_behavior()
 
@@ -322,3 +324,31 @@ class ROAMSConfig:
         # Look up the handle-negative-emissions function
         if isinstance(self.handle_negative,str):
             self.handle_negative = getattr(roams.aerial.assumptions,self.handle_negative)
+
+
+    def to_dict(self) -> dict:
+        """
+        Return a dictionary embodying the final content of the parsed config 
+        (including the application of default behavior, and including any 
+        configs that are nonstandard but were passed anyway).
+
+        Do this by reading the assigned attributes, as opposed to reading 
+        the input values directly (i.e. inclusive of the applied default 
+        behavior).
+
+        Returns:
+            dict:
+                The key: value pairs resulting from the reading of the given 
+                config file.
+        """
+        result = self._config.copy()
+        for config, value in self._config.items():
+            value = getattr(self,config)
+            
+            # Keep all configs as-is, except for functions. Take only their 
+            # names, like was specified in the input file.
+            if isinstance(value,Callable):
+                result[config] = value.__name__
+
+        return result
+

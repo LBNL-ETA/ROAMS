@@ -364,12 +364,10 @@ class GHGIDataInput:
             
             natl_midstream_ch4_loss = self.compute_natnl_midstream_loss()
 
-            midstream_loss_est = state_midstream_ch4_loss.copy()
-            for case in midstream_loss_est.index:
-                midstream_loss_est.loc[case] = min(
-                    midstream_loss_est.loc[case],
-                    natl_midstream_ch4_loss.loc[case]
-                )
+            if state_midstream_ch4_loss["mid"]<=natl_midstream_ch4_loss["mid"]:
+                midstream_loss_est = state_midstream_ch4_loss.copy()
+            else:
+                midstream_loss_est = natl_midstream_ch4_loss.copy()
             
             self._midstream_ch4_loss_rate = (
                 (1 - self.frac_aerial_midstream_emissions)
@@ -617,8 +615,8 @@ if __name__=="__main__":
         '/Users/eneill/repos/ROAMS/data/Midstream Data/GHGI 2022 Table 3-69.csv',
         '/Users/eneill/repos/ROAMS/data/Midstream Data/GHGI 2022 Table 3-74.csv',
         '/Users/eneill/repos/ROAMS/data/Midstream Data/GHGI 2022 Table 3-43.csv',
-        2020,
-        "TX",
+        2019,
+        "NM",
         .9,
         frac_aerial_midstream_emissions = .2697,
         ghgi_co2eq_unit = "MMT/yr", # for docs: has to have "/"
