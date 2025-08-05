@@ -621,21 +621,3 @@ class GHGIDataInput:
         )
 
         return uncertainty_multiplier
-
-if __name__=="__main__":
-    c = GHGIDataInput(
-        '/Users/eneill/repos/ROAMS/data/Midstream Data/State_level_GHGI2021_forTX.csv',
-        '/Users/eneill/repos/ROAMS/data/Midstream Data/Enverus_prod_by_sta1_MCFNGperYear.csv',
-        '/Users/eneill/repos/ROAMS/data/Midstream Data/Enverus_prod_natnl_monthly_gas_oil_prod.csv',
-        '/Users/eneill/repos/ROAMS/data/Midstream Data/GHGI 2022 Table 3-69.csv',
-        '/Users/eneill/repos/ROAMS/data/Midstream Data/GHGI 2022 Table 3-74.csv',
-        '/Users/eneill/repos/ROAMS/data/Midstream Data/GHGI 2022 Table 3-43.csv',
-        2019,
-        "NM",
-        .9,
-        frac_aerial_midstream_emissions = .2697,
-        ghgi_co2eq_unit = "MMT/yr", # for docs: has to have "/"
-        ghgi_ch4emissions_unit = "kt/yr",
-        enverus_prod_unit = "mcf/yr", # for docs: has to have "/"
-        loglevel = logging.INFO
-    )
