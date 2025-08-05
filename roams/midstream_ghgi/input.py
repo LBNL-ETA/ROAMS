@@ -119,9 +119,9 @@ class GHGIDataInput:
             state : str,
             frac_production_ch4 : float,
             frac_aerial_midstream_emissions : float,
-            ghgi_co2eq_unit = "MMT/yr", # for docs: has to have "/"
+            ghgi_co2eq_unit = "MMT/yr",
             ghgi_ch4emissions_unit = "kt/yr",
-            enverus_prod_unit = "mcf/yr", # for docs: has to have "/"
+            enverus_prod_unit = "mcf/yr",
             loglevel = logging.INFO
         ):
         self.log = logging.getLogger("roams.midstream_ghgi.input.GHGIDataInput")
@@ -272,7 +272,7 @@ class GHGIDataInput:
         # E.g. state_prod = 100000 mcf/yr
         state_prod = self.state_prod_data.loc[self.state,self.year]
 
-        # E.g. _, denom = "tcf", "yr"
+        # E.g. _, denom = "mcf", "yr"
         _, denom = self.enverus_prod_unit.split("/")
         
         # Convert to mcf/<time> so that we can multiply directly with the CH4 density
@@ -387,7 +387,7 @@ class GHGIDataInput:
             else:
                 midstream_loss_est = natl_midstream_ch4_loss.copy()
             
-            self._total_midstream_ch4_loss_rate =  midstream_loss_est
+            self._total_midstream_ch4_loss_rate = midstream_loss_est
 
         return self._total_midstream_ch4_loss_rate
     
