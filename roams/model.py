@@ -101,6 +101,7 @@ class ROAMSModel:
         """
         self.make_samples()
         self.combine_prod_samples()
+        self.compute_simulated_midstream_emissions()
         self.generate_and_write_outputs()
     
     def make_samples(self):
@@ -148,7 +149,7 @@ class ROAMSModel:
             sub_mdl_dist = stratify_sample(
                 self.cfg.prodSimResults.simulated_emissions,
                 self.cfg.prodSimResults.simulated_production,
-                self.cfg.coveredProductivity.ng_production_volumetric,
+                self.cfg.coveredProductivity.ng_production_dist_volumetric,
                 n_infra=self.num_wells_to_simulate
             )
         else:
@@ -552,6 +553,33 @@ class ROAMSModel:
             # Sort the corresponding extra_emissions_for_cdf
             self.prod_partial_detection_emissions[:,n] = self.prod_partial_detection_emissions[combined_sort_idx[:,n],n]
 
+    def compute_simulated_midstream_emissions(self):
+        """
+        Use the available midstream loss information (e.g. midstreamGHGIData) 
+        of the input data to define an amount of estimated midstream loss 
+        from sub-detection-level emissions.
+
+        This is computed as [fractional loss rate] * [total covered prdouction],
+        where the fractional loss rate is either total (inclusive of emissions 
+        likely detected aerially), or sub-detection-level only (attempting 
+        to remove some of the estimate to leave only sub-detection-level).
+
+        For GHGI data, it's expected that the loss rates are given as a 
+        pd.Series with "low", "mid", and "high" indices, which are supposed 
+        to be mapped to the confidence intervals.
+        """
+        # sub-detection-level CH4 midstream emissions, in COMMON_EMISSIONS_UNITS
+        self.submdl_ch4_midstream_emissions = (
+            self.cfg.midstreamGHGIData.submdl_midstream_ch4_loss_rate
+            * self.cfg.ch4_total_covered_production_mass
+        )
+        
+        # All CH4 midstream emissions, in COMMON_EMISSIONS_UNITS
+        self.total_ch4_midstream_emissions = (
+            self.cfg.midstreamGHGIData.total_midstream_ch4_loss_rate
+            * self.cfg.ch4_total_covered_production_mass
+        )
+    
     def generate_and_write_outputs(self):
         """
         Call methods that can add tabular outputs to self.table_outputs, and 
@@ -605,8 +633,7 @@ class ROAMSModel:
         self.make_prod_distr_summary()
 
         # If covered_productivity exists, summarize fractional loss
-        if self.cfg.coveredProductivity is not None:
-            self.make_fractional_loss()
+        self.make_fractional_loss()
 
         if self.save_mean_dist:
             # Add summary of production distributions (larger table)
@@ -619,20 +646,42 @@ class ROAMSModel:
         result = pd.DataFrame({
             f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})" : [np.nan],
             f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})" : [np.nan],
-            f"Mean fractional CH4 Loss ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)":[np.nan]
+            f"Mean fractional CH4 Loss in production ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)":[np.nan],
+            f"Mean fractional CH4 Loss in midstream ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)":[np.nan]
         })
 
-        # Fill with a single value: total covered volumetric productivity of CH4
-        result[f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})"] = self.cfg.coveredProductivity.ch4_production_volumetric.sum()
-        result[f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})"] = self.cfg.coveredProductivity.ch4_production_mass.sum()
+        # Fill with a single value: total covered volumetric and mass productivity of CH4
+        result[f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})"] = self.cfg.ch4_total_covered_production_volume
+        result[f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})"] = self.cfg.ch4_total_covered_production_mass
         
-        # Volumetric fractional loss = [combined distribution total emissions rate] / [covered productivity production rate]
-        result[f"Mean fractional CH4 Loss ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)"] = (
+        # Volumetric production fractional loss = [combined production distribution total emissions rate] / [covered productivity production rate]
+        result[f"Mean fractional CH4 Loss in production ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)"] = (
             (
                 self.combined_samples.sum(axis=0).mean() 
                 + self.prod_partial_detection_emissions.sum(axis=0).mean()
             )
-            /self.cfg.coveredProductivity.ch4_production_mass.sum()
+            /self.cfg.ch4_total_covered_production_mass
+        )
+        
+        # Compute midstream aerial contribution above midstream transition point
+        midstream_aerial_em_abovetp = (
+            (
+                # midstream aerial samples total emissions, only including those ≥ tp
+                np.array([self.midstream_tot_aerial_sample[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])
+                
+                # midstream partial detection emissions, only including those with corresponding emissions ≥ tp
+                +np.array([self.midstream_partial_detection_emissions[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])
+            ).mean()/1e3
+        )
+        
+        midstream_lost_emiss = (
+            self.submdl_ch4_midstream_emissions["mid"]
+            + midstream_aerial_em_abovetp
+        )
+        
+        # Volumetric midstream fractional loss = [sub-mdl estimate + above-tp aerial total emissions rate] / [covered productivity production rate]
+        result[f"Mean fractional CH4 Loss in midstream ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)"] = (
+            midstream_lost_emiss/self.cfg.ch4_total_covered_production_mass
         )
 
         self.table_outputs["Fractional Loss Summary"] = result
@@ -649,57 +698,87 @@ class ROAMSModel:
 
         # Create an empty table that will summarize each component of the 
         # combined production emissions distribution.
-        prod_summary = pd.DataFrame(
+        prod_and_mid_summary = pd.DataFrame(
             index=[
-                f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
-                f"Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
-                f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
-                f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})", 
-                f"Overall Combined Total Production CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
-                f"Transition Point ({COMMON_EMISSIONS_UNITS})",
+                f"Production Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Production Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Production Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Production Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})", 
+                f"Production overall Combined Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Production Transition Point ({COMMON_EMISSIONS_UNITS})",
+                f"Midstream GHGI-based CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Midstream Aerial Only Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Midstream Partial Detection Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
             ],
             columns=pd.MultiIndex.from_product(
                 [["By Itself","Accounting for Transition Point"],quantity_cols],
             )
         )
         
-        # Report the sampled aerial emissions distribution, regardless of transition point
+        # Report the sampled aerial production emissions distribution, regardless of transition point
         sum_emiss_aerial = self.prod_tot_aerial_sample.sum(axis=0)/1e3
-        prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_aerial)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial)[quantity_cols].values
 
-        # Report sampled aerial emissions distributions above transition point
+        # Report sampled aerial production emissions distributions above transition point
         sum_emiss_aerial_abovetp = np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
-        prod_summary.loc[f"Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aerial_abovetp)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial_abovetp)[quantity_cols].values
 
-        # In this addition, the expectation is the only one or other is contributing to the sum
+        # Report total partial detection of aerially surveyed production infrastructure
         sum_emiss_partial = self.prod_partial_detection_emissions.sum(axis=0)/1e3
-        prod_summary.loc[f"Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_partial)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_partial)[quantity_cols].values
         
-        # Like above, in this addition there are either additional copies of sampled emissions in `total_aerial_sample`, or the total missing emissions are included in `extra_emissions_for_cdf`.
+        # Report combined production emissions from aerial sample AND partial detection correction
         sum_emiss_aer_comb = (self.prod_tot_aerial_sample.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0))/1e3
-        prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_aer_comb)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb)[quantity_cols].values
 
-        # This will be aerial+partial detection, but ONLY total contributions above each transition point
+        # This will be combined production aerial+partial detection, but ONLY total contributions above each transition point
         sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + np.array([self.prod_partial_detection_emissions[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
-        prod_summary.loc[f"Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_aer_comb_abovetp)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb_abovetp)[quantity_cols].values
         
         # The total amount of simulated emissions
         sum_emiss_sim = self.simulated_sample.sum(axis=0)/1e3
-        prod_summary.loc[f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_sim)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_sim)[quantity_cols].values
 
         # The total amount of simulated emissions below transition point, that end up being coounted in the resulting distribution.
         sum_emiss_sim_belowtp = np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
-        prod_summary.loc[f"Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles(sum_emiss_sim_belowtp)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_sim_belowtp)[quantity_cols].values
         
         # Report from total combined distribution: only "By Itself" (doesn't make sense to 'account for transition point' in combined distribution)
         sum_emiss_all_comb = (self.combined_samples.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0))/1e3
-        prod_summary.loc[f"Overall Combined Total Production CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(sum_emiss_all_comb)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production overall Combined Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_all_comb)[quantity_cols].values
 
         # Report the same quantities for the transition point.
-        prod_summary.loc[f"Transition Point ({COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles(self.prod_tp)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Production Transition Point ({COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(self.prod_tp)[quantity_cols].values
         
+        # Report the total estimated midstream emissions based on the GHGI estimation, as well as the estimated sub-detection-level estimate
+        prod_and_mid_summary.loc[f"Midstream GHGI-based CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromghgi(self.total_ch4_midstream_emissions/1e3)[quantity_cols].values
+        prod_and_mid_summary.loc[f"Midstream GHGI-based CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromghgi(self.submdl_ch4_midstream_emissions/1e3)[quantity_cols].values
+        
+        # Report the sampled aerial midstream emissions distribution, regardless of transition point
+        sum_emiss_aerial = self.midstream_tot_aerial_sample.sum(axis=0)/1e3
+        prod_and_mid_summary.loc[f"Midstream Aerial Only Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial)[quantity_cols].values
+
+        # Report sampled aerial midstream emissions distributions above transition point
+        sum_emiss_aerial_abovetp = np.array([self.midstream_tot_aerial_sample[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+        prod_and_mid_summary.loc[f"Midstream Aerial Only Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial_abovetp)[quantity_cols].values
+
+        # Report total partial detection of aerially surveyed midstream infrastructure
+        sum_emiss_partial = self.midstream_partial_detection_emissions.sum(axis=0)/1e3
+        prod_and_mid_summary.loc[f"Midstream Partial Detection Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_partial)[quantity_cols].values
+        sum_emiss_partial_abovetp = np.array([self.midstream_partial_detection_emissions[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+        prod_and_mid_summary.loc[f"Midstream Partial Detection Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_partial_abovetp)[quantity_cols].values
+        
+        # Report combined midstream emissions from aerial sample AND partial detection correction
+        sum_emiss_aer_comb = (self.midstream_tot_aerial_sample.sum(axis=0) + self.midstream_partial_detection_emissions.sum(axis=0))/1e3
+        prod_and_mid_summary.loc[f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb)[quantity_cols].values
+
+        # This will be combined midstream aerial+partial detection, but ONLY total contributions above each transition point
+        sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + sum_emiss_partial_abovetp
+        prod_and_mid_summary.loc[f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb_abovetp)[quantity_cols].values
+
         # Put the resulting table into self.table_outputs
-        self.table_outputs["Production Summary"] = prod_summary
+        self.table_outputs["Production and Midstream Summary"] = prod_and_mid_summary
     
     def make_prod_distr_summary(self):
         """
@@ -762,10 +841,11 @@ class ROAMSModel:
         # Put the resulting table into self.table_outputs
         self.table_outputs["Combined Production Distribution Summary"] = dist_summary
     
-    def mean_and_quantiles(self,values: np.ndarray) -> pd.Series:
+    def mean_and_quantiles_fromsamples(self,values: np.ndarray) -> pd.Series:
         """
         Return the average of the given values, as well as the estimated 
-        quantiles, based on the observed quantiles and visits per site.
+        quantiles, based on the observed quantiles across all the given 
+        samples and visits per site.
 
         Args:
             values (np.ndarray):
@@ -795,6 +875,33 @@ class ROAMSModel:
                 if val<output["Avg"] 
                 else output["Avg"] + diff
             )
+
+        return output
+    
+    def mean_and_quantiles_fromghgi(self,values: pd.Series) -> pd.Series:
+        """
+        Return the given ghgi-based estimate with a new index labeled with 
+        the 2.5% and 97.5% confidence labels for the output summary tables.
+        (It won't use self._quantiles because the underlying quantities are 
+        at least based on this 95% interval. So if you really want to change 
+        the confidence intervals, it's up to you what to do with the 
+        interpretation of the underlying data.
+
+        Args:
+            values (pd.Seires):
+                A length 3 pd.Series with indices "low","mid","high"
+
+        Returns:
+            pd.Series:
+                A series indexed by "Avg", "2.5% CI","97.5% CI", (e.g.), whose
+                values are the estimates of the corresponding statistic for 
+                given values.
+        """
+        output = pd.Series()
+
+        output["Avg"] = values["mid"]
+        output["2.5% CI"] = values["low"]
+        output["97.5% CI"] = values["high"]
 
         return output
     

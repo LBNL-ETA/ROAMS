@@ -2,8 +2,8 @@ import logging
 
 import pandas as pd
 
-from roams.constants import COMMON_EMISSIONS_UNITS, GWP_CH4, CH4_DENSITY_KGMCF
-from roams.utils import convert_units
+from roams.constants import COMMON_EMISSIONS_UNITS
+from roams.utils import convert_units, GWP_CH4, CH4_DENSITY_KGMCF
 
 class GHGIDataInput:
     """
@@ -117,7 +117,7 @@ class GHGIDataInput:
             ghgi_ch4emissions_petprod_file : str,
             year : int,
             state : str,
-            frac_ch4_production : float,
+            frac_production_ch4 : float,
             frac_aerial_midstream_emissions : float,
             ghgi_co2eq_unit = "MMT/yr", # for docs: has to have "/"
             ghgi_ch4emissions_unit = "kt/yr",
@@ -138,7 +138,7 @@ class GHGIDataInput:
         
         self.year = year
         self.state = state
-        self.frac_ch4_production = frac_ch4_production
+        self.frac_production_ch4 = frac_production_ch4
         self.frac_aerial_midstream_emissions = frac_aerial_midstream_emissions
         
         self.state_ghgi_unit = ghgi_co2eq_unit
@@ -181,7 +181,7 @@ class GHGIDataInput:
         )
         
         # E.g. 100000 [mcfNG/yr] * .9 [mcfCH4/mcfNG] * 19.17 [kgCH4/mcfCH4] = 1.7e6 [kgCH4/yr]
-        natnl_prod_ch4 = natnl_prod_mcf * self.frac_ch4_production * CH4_DENSITY_KGMCF
+        natnl_prod_ch4 = natnl_prod_mcf * self.frac_production_ch4 * CH4_DENSITY_KGMCF
         
         # E.g. Convert [kg/yr] into [kg/h] 
         natnl_production_ch4_commonunits = convert_units(
@@ -284,7 +284,7 @@ class GHGIDataInput:
         )
         
         # E.g. 100000 [mcfNG/yr] * .9 [mcfCH4/mcfNG] * 19.17 [kgCH4/mcfCH4] = 1.7e6 [kgCH4/yr]
-        state_prod_ch4 = state_prod_mcf * self.frac_ch4_production * CH4_DENSITY_KGMCF
+        state_prod_ch4 = state_prod_mcf * self.frac_production_ch4 * CH4_DENSITY_KGMCF
         
         # E.g. Convert [kg/yr] into [kg/h]
         state_prod_common_units = convert_units(
@@ -296,7 +296,7 @@ class GHGIDataInput:
             f"Converted {state_prod:,.0f} {self.enverus_prod_unit} of NG production "
             f"into {state_prod_common_units:,.0f} {COMMON_EMISSIONS_UNITS} "
             f"of CH4 production at an assumed density of {CH4_DENSITY_KGMCF:.2f} "
-            f"and CH4/NG fraction of {self.frac_ch4_production}."
+            f"and CH4/NG fraction of {self.frac_production_ch4}."
         )
 
         # State methane loss rate is just the ratio of reported emissions
@@ -325,7 +325,25 @@ class GHGIDataInput:
                 whose values are the estimate ("mid") and bounds ("low", 
                 "high").
         """
-        if not hasattr(self,"_midstream_ch4_loss_rate"):
+        return (
+            self.total_midstream_ch4_loss_rate
+            * (1 - self.frac_aerial_midstream_emissions)
+        )
+
+    
+    @property
+    def total_midstream_ch4_loss_rate(self) -> pd.Series:
+        """
+        The total CH4 loss rate of midstream infrastructure for the given 
+        state and year, as estimated by the given GHGI data.
+
+        Returns:
+            pd.Series:
+                Return a pd.Series with "low","mid", and "high" indices, 
+                whose values are the estimate ("mid") and bounds ("low", 
+                "high").
+        """
+        if not hasattr(self,"_total_midstream_ch4_loss_rate"):
 
             # State CH4 loss rate = [fugitive CH4 from NG production] / [All CH4 produced]
             state_ch4_lossrate = self.compute_state_midstream_lossrate()
@@ -369,12 +387,9 @@ class GHGIDataInput:
             else:
                 midstream_loss_est = natl_midstream_ch4_loss.copy()
             
-            self._midstream_ch4_loss_rate = (
-                (1 - self.frac_aerial_midstream_emissions)
-                * midstream_loss_est
-            )
+            self._total_midstream_ch4_loss_rate =  midstream_loss_est
 
-        return self._midstream_ch4_loss_rate
+        return self._total_midstream_ch4_loss_rate
     
     def load_national_prod_data(self) -> pd.DataFrame:
         """

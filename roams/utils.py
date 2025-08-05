@@ -4,9 +4,16 @@ MPH_PER_MPS = 2.23694
 # 35.3147 cubic feet = 1 cubic meter
 CUFT_PER_M3 = 35.3147
 
-# Methane density at 1 atm and 25C, in kg/m3 and kg/cuft
-CH4_DENSITY_KGM3 = 0.657
-CH4_DENSITY_KGCUFT = CH4_DENSITY_KGM3 / CUFT_PER_M3 # .657 kg/m3 * [1 m3 / 35.3147 cuft] = .0186 kg/cuft
+# Assumed density of gaseous CH4, kgCH4/mcfCH4
+# NOTE: This differs form the effective assumption made in Analytica, which is 19.25 (~18/.935)
+# CH4_DENSITY_KGMCF = 19.1773453
+CH4_DENSITY_KGMCF = 18/.935
+CH4_DENSITY_KGCUFT = CH4_DENSITY_KGMCF/1000         # [kg/mcf] * [1 mcf/ 1000 cuft] = [kg/cuft]
+CH4_DENSITY_KGM3 = CH4_DENSITY_KGCUFT * CUFT_PER_M3 # [kg/cuft]*[35.3147 cuft/1 m3] = [kg/m3]
+
+# CO2 equivalent warming potential of CH4
+# (Per IPCC AR4, was revised higher in later estimates)
+GWP_CH4 = 25.
 
 # A dictionary of unit : conversion to kg/h, where each dictionary value 
 # represents the amount of that unit in one kg/h. The unit of tons here is 
@@ -61,6 +68,8 @@ PRODUCTION_CONVERSIONS = {
     "mscf/year" : 365.25,
     "mscf/day"  : 1,
     "mscf/d"    : 1,
+    "mcf/d"     : 1,
+    "mcf/day"   : 1,
     "mscf/h"    : 1/24, # e.g. 1 mscf/day = 1/24 mscf/h
     "mscf/hr"   : 1/24,
     "scf/d"     : 1e3,

@@ -5,7 +5,7 @@ from unittest import TestCase
 import pandas as pd
 import numpy as np
 
-from roams.production.input import CoveredProductionData
+from roams.production.input import CoveredProductionDistData
 from roams.conf import TEST_DIR
 from roams.utils import CH4_DENSITY_KGM3, CH4_DENSITY_KGCUFT
 
@@ -28,14 +28,14 @@ class CoveredProductionDataTests(TestCase):
         Assert that when the input units are the same as the common production 
         units, the values in the table match the volumetric NG output.
         """        
-        coveredProdData = CoveredProductionData(
+        coveredProdData = CoveredProductionDistData(
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
         )
         np.testing.assert_equal(
             # Will be returned in COMMON_PRODUCTION_UNITS (mscf/day)
-            coveredProdData.ng_production_volumetric,
+            coveredProdData.ng_production_dist_volumetric,
 
             # Because the CoveredProductionData class was told the data was mscf/day, should 
             # be identical to what was returned
@@ -48,26 +48,26 @@ class CoveredProductionDataTests(TestCase):
         treated as a volumetric fraction of CH4 in produced NG.
         """        
         # If the volumetric fraction of CH4 is 0 -> should be 0 across the board
-        coveredProdData = CoveredProductionData(
+        coveredProdData = CoveredProductionDistData(
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
             frac_production_ch4=0
         )
         np.testing.assert_equal(
-            coveredProdData.ch4_production_volumetric,
+            coveredProdData.ch4_production_dist_volumetric,
             DUMMY_COVEREDPROD_DATA["estimated productivity (vol/time)"].values*0
         )
         
         # If volumetric fraction is 1 -> should be identical to given values.
-        coveredProdData = CoveredProductionData(
+        coveredProdData = CoveredProductionDistData(
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
             frac_production_ch4=1.
         )
         np.testing.assert_equal(
-            coveredProdData.ch4_production_volumetric,
+            coveredProdData.ch4_production_dist_volumetric,
             DUMMY_COVEREDPROD_DATA["estimated productivity (vol/time)"].values
         )
 
@@ -77,7 +77,7 @@ class CoveredProductionDataTests(TestCase):
         numeric) result in ValueError.
         """
         with self.assertRaises(ValueError):
-            coveredProdData = CoveredProductionData(
+            coveredProdData = CoveredProductionDistData(
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
@@ -85,7 +85,7 @@ class CoveredProductionDataTests(TestCase):
             )
         
         with self.assertRaises(ValueError):
-            coveredProdData = CoveredProductionData(
+            coveredProdData = CoveredProductionDistData(
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
@@ -93,7 +93,7 @@ class CoveredProductionDataTests(TestCase):
             )
         
         with self.assertRaises(ValueError):
-            coveredProdData = CoveredProductionData(
+            coveredProdData = CoveredProductionDistData(
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
@@ -101,7 +101,7 @@ class CoveredProductionDataTests(TestCase):
             )
         
         with self.assertRaises(ValueError):
-            coveredProdData = CoveredProductionData(
+            coveredProdData = CoveredProductionDistData(
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
@@ -109,7 +109,7 @@ class CoveredProductionDataTests(TestCase):
             )
         
         with self.assertRaises(ValueError):
-            coveredProdData = CoveredProductionData(
+            coveredProdData = CoveredProductionDistData(
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
@@ -122,14 +122,14 @@ class CoveredProductionDataTests(TestCase):
         raises an Error.
         """
         with self.assertRaises(KeyError):
-            coveredProdData = CoveredProductionData(
+            coveredProdData = CoveredProductionDistData(
                 COVERED_PROD_FILE,
                 "FAKE COLUMN NAME",
                 "mscf/day",
             )
         
         with self.assertRaises(ValueError):
-            coveredProdData = CoveredProductionData(
+            coveredProdData = CoveredProductionDistData(
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 None,
@@ -141,7 +141,7 @@ class CoveredProductionDataTests(TestCase):
         """
         # If 100% of NG is CH4, assert the mass of CH4 in 
         # covered NG production is essentially [covered production]*[density]
-        coveredProdData = CoveredProductionData(
+        coveredProdData = CoveredProductionDistData(
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
@@ -149,7 +149,7 @@ class CoveredProductionDataTests(TestCase):
         )
         np.testing.assert_array_almost_equal(
             # will be returned in COMMON_EMISSIONS_UNITS (kg/h)
-            coveredProdData.ch4_production_mass, 
+            coveredProdData.ch4_production_dist_mass, 
 
             # mscf/day x [1000 cuft/mscf] x [.0186 kg/cuft] * [1 day / 24h] = kg/h
             DUMMY_COVEREDPROD_DATA["estimated productivity (vol/time)"]*1000*CH4_DENSITY_KGCUFT/24.,
@@ -160,7 +160,7 @@ class CoveredProductionDataTests(TestCase):
         
         # If 100% of NG is CH4, assert the mass of CH4 in 
         # covered NG production is essentially [covered production]*[density]
-        coveredProdData = CoveredProductionData(
+        coveredProdData = CoveredProductionDistData(
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/h",
@@ -168,7 +168,7 @@ class CoveredProductionDataTests(TestCase):
         )
         np.testing.assert_array_almost_equal(
             # will be returned in COMMON_EMISSIONS_UNITS (kg/h)
-            coveredProdData.ch4_production_mass, 
+            coveredProdData.ch4_production_dist_mass, 
 
             # mscf/h x [1000 cuft/mscf] x [.0186 kg/cuft] = kg/h
             DUMMY_COVEREDPROD_DATA["estimated productivity (vol/time)"]*1000*CH4_DENSITY_KGCUFT,
@@ -179,7 +179,7 @@ class CoveredProductionDataTests(TestCase):
         
         # If 100% of NG is CH4, assert the mass of CH4 in 
         # covered NG production is essentially [covered production]*[density]
-        coveredProdData = CoveredProductionData(
+        coveredProdData = CoveredProductionDistData(
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "m3/h",
@@ -187,7 +187,7 @@ class CoveredProductionDataTests(TestCase):
         )
         np.testing.assert_array_almost_equal(
             # will be returned in COMMON_EMISSIONS_UNITS (kg/h)
-            coveredProdData.ch4_production_mass, 
+            coveredProdData.ch4_production_dist_mass, 
 
             # m3/h x x [.657 kg/m3]
             DUMMY_COVEREDPROD_DATA["estimated productivity (vol/time)"]*CH4_DENSITY_KGM3,

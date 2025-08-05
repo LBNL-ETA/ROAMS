@@ -5,13 +5,16 @@ from collections.abc import Iterable, Callable
 
 log = logging.getLogger("roams.input.ROAMSConfig")
 
-from roams.constants import ALVAREZ_ET_AL_CH4_FRAC
+from roams.constants import ALVAREZ_ET_AL_CH4_FRAC, COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS
+from roams.utils import ch4_volume_to_mass, convert_units
+
 import roams.aerial.partial_detection
 import roams.aerial.assumptions
 
 from roams.aerial.input import AerialSurveyData
 from roams.simulated.input import SimulatedProductionAssetData
-from roams.production.input import CoveredProductionData
+from roams.production.input import CoveredProductionDistData
+from roams.midstream_ghgi.input import GHGIDataInput
 
 # This constant controls what missing keys in an input file will raise an error.
 # All highest-level keys, and listed keys within, have to exist.
@@ -35,6 +38,21 @@ _REQUIRED_CONFIGS = {
     "num_wells_to_simulate" : int,
     "well_visit_count" : int,
     "wells_per_site" : float,
+    "total_covered_ngprod_mcfd" : (float,int),
+
+    # Midstream required GHGI inputs
+    "state_ghgi_file" : str,
+    "ghgi_co2eq_unit" : str,
+    "enverus_state_production_file" : str,
+    "enverus_natnl_production_file" : str,
+    "enverus_prod_unit" : str,
+    "ghgi_ch4emissions_ngprod_file" : str,
+    "ghgi_ch4emissions_ngprod_uncertainty_file" : str,
+    "ghgi_ch4emissions_petprod_file" : str,
+    "ghgi_ch4emissions_unit" : str,
+    "year" : int,
+    "state" : str,
+    "frac_aerial_midstream_emissions" : float,
     
     # Algorithmic required inputs
     "midstream_transition_point" : (float,int),
@@ -48,9 +66,9 @@ _DEFAULT_CONFIGS = {
     "sim_prod_unit" : None,
 
     # Covered productivity attributes
-    "covered_productivity_file" : None,
-    "covered_productivity_col" : None,
-    "covered_productivity_unit" : None,
+    "covered_productivity_dist_file" : None,
+    "covered_productivity_dist_col" : None,
+    "covered_productivity_dist_unit" : None,
 
     # Aerial emissions and data specification defaults
     "aerial_em_col" : None,
@@ -112,9 +130,10 @@ class ROAMSConfig:
             config : str | dict,
             _reqs : dict = _REQUIRED_CONFIGS,
             _def : dict = _DEFAULT_CONFIGS,
-            coveredProdDataClass : CoveredProductionData = CoveredProductionData,
+            coveredProdDistDataClass : CoveredProductionDistData = CoveredProductionDistData,
             simDataClass : SimulatedProductionAssetData = SimulatedProductionAssetData,
             surveyClass : AerialSurveyData = AerialSurveyData,
+            midstreamGHGHIDataClass : GHGIDataInput = GHGIDataInput,
         ):
         """
         The config_dict is passed directly to the __init__ of the parent 
@@ -153,7 +172,7 @@ class ROAMSConfig:
                 default values of missing but optional attributes.
                 Defaults to _DEFAULT_CONFIGS.
 
-            coveredProdDataClass (CoveredProductionData, optional): 
+            coveredProdDistDataClass (CoveredProductionDistData, optional): 
                 A class that is either `CoveredProductionData` or a child 
                 class thereof. Intended to serve as an entrypoint for 
                 the estimated covered production data for the actual analysis 
@@ -172,6 +191,13 @@ class ROAMSConfig:
                 thereof. Intended to serve as an entrypoint to the aerial 
                 survey data for the actual analysis logic.
                 Defaults to AerialSurveyData.
+            
+            midstreamGHGHIDataClass (GHGIDataInput, optional):
+                A class that is either `GHGIDataInput` or a child class
+                thereof. Intended to serve as an entrypoint to the midstream 
+                sub-detection-level midstream loss rate, as estimated per the 
+                GHGI data.
+                Defaults to GHGIDataInput.
 
         Raises:
             KeyError:
@@ -214,8 +240,8 @@ class ROAMSConfig:
         # assign them all as attributes
         for k,v in config.items():
             log.debug(
-                f"Setting self.{k} = {v} from provided config (perhaps with some "
-                f"defaults)."
+                f"Setting self.{k} = {v} from provided config (if None, "
+                "default may be applied later)."
             )
             setattr(self,k,v)
             if k not in _reqs.keys() and k not in _def.keys():
@@ -234,11 +260,11 @@ class ROAMSConfig:
         # Load the covered productivity data, if a file is given 
         # (otherwise assign None - it's up to analysis code to care about 
         # whether or not this is provided).
-        if self.covered_productivity_file is not None:
-            self.coveredProductivity = coveredProdDataClass(
-                covered_production_file = self.covered_productivity_file,
-                covered_production_col = self.covered_productivity_col,
-                covered_production_unit = self.covered_productivity_unit,
+        if self.covered_productivity_dist_file is not None:
+            self.coveredProductivity = coveredProdDistDataClass(
+                covered_production_dist_file = self.covered_productivity_dist_file,
+                covered_production_dist_col = self.covered_productivity_dist_col,
+                covered_production_dist_unit = self.covered_productivity_dist_unit,
                 frac_production_ch4 = self.frac_production_ch4,
                 loglevel = self.loglevel,
             )
@@ -273,6 +299,23 @@ class ROAMSConfig:
             prod_asset_type = self.prod_asset_type,
             midstream_asset_type = self.midstream_asset_type,
             loglevel = self.loglevel,
+        )
+
+        self.midstreamGHGIData = midstreamGHGHIDataClass(
+            self.state_ghgi_file,
+            self.enverus_state_production_file,
+            self.enverus_natnl_production_file,
+            self.ghgi_ch4emissions_ngprod_file,
+            self.ghgi_ch4emissions_ngprod_uncertainty_file,
+            self.ghgi_ch4emissions_petprod_file,
+            self.year,
+            self.state,
+            self.frac_production_ch4,
+            frac_aerial_midstream_emissions=self.frac_aerial_midstream_emissions,
+            ghgi_co2eq_unit=self.ghgi_co2eq_unit,
+            ghgi_ch4emissions_unit=self.ghgi_ch4emissions_unit,
+            enverus_prod_unit=self.enverus_prod_unit,
+            loglevel=self.loglevel,
         )
 
     def default_input_behavior(self):
@@ -351,4 +394,47 @@ class ROAMSConfig:
                 result[config] = value.__name__
 
         return result
+    
+    @property
+    def ch4_total_covered_production_mass(self) -> float:
+        """
+        Return total covered production of the surveyed region in 
+        COMMON_EMISSIONS_UNITS of CH4.
 
+        Returns:
+            float:
+                The estimated production rate of CH4 (in 
+                COMMON_EMISSIONS_UNITS) in the covered region.
+        """
+        ch4_mcf_per_day = (
+            self.frac_production_ch4
+            * self.total_covered_ngprod_mcfd
+        )
+        
+        return ch4_volume_to_mass(
+            ch4_mcf_per_day,
+            "mcf/d",
+            COMMON_EMISSIONS_UNITS
+        )
+    
+    @property
+    def ch4_total_covered_production_volume(self) -> float:
+        """
+        Return total covered production of the surveyed region in 
+        COMMON_EMISSIONS_UNITS of CH4.
+
+        Returns:
+            float:
+                The estimated production rate of CH4 (in 
+                COMMON_EMISSIONS_UNITS) in the covered region.
+        """
+        ch4_mcf_per_day = (
+            self.frac_production_ch4
+            * self.total_covered_ngprod_mcfd
+        )
+        
+        return convert_units(
+            ch4_mcf_per_day,
+            "mcf/d",
+            COMMON_PRODUCTION_UNITS
+        )

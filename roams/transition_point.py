@@ -1,4 +1,8 @@
+import logging
+
 import numpy as np
+
+log = logging.getLogger("roams.transition_point.find_transition_point")
 
 def find_transition_point(
     aerial_x,
@@ -137,7 +141,21 @@ def find_transition_point(
     # (and with the above correction, only care about pos-to-negative switch.)
     transition_point = np.argmax(diff>0,axis=0)
     
-    # Return the x values at each first transition point.
+    # Take the x values at each first transition point.
     # Remove 1 from the transition_point index to account for the fact that the 
     # first value is always 0 in each smoothed distribution diff (think of it as corresponding to 4 kgh)
+    tps = xs[transition_point - 1]
+
+    if (tps==xs[0]).any():
+        log.warning(
+            "At least one of the identified transition points happened to be "
+            f"the same as the minimum possible transition point ({xs[0]} kgh)"
+            ", which is just the minimum kgh value included in checking for "
+            "the transition point, based on what was done in the original "
+            "Analytica model. This may mean that you need to define a new "
+            "transition point function that can find a smaller transition "
+            "point, or be sure that the units of your simulated and aerial "
+            "data are correctly specified."
+        )
+    
     return xs[transition_point-1]
