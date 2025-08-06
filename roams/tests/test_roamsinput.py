@@ -12,6 +12,7 @@ from roams.input import ROAMSConfig
 from roams.tests.test_aerialinput import SOURCE_FILE, PLUME_FILE
 from roams.tests.test_siminput import SIM_FILE
 from roams.tests.test_coveredprodinput import COVERED_PROD_FILE
+from roams.tests.test_ghgiinput import STATE_GHGI_FILENAME, STATE_PROD_FILENAME, NATNL_PROD_FILENAME, NATNL_NGPROD_GHGI_FILENAME, NATNL_NGPROD_UNCERT_GHGI_FILENAME, NATNL_PETPROD_GHGI_FILENAME
 
 TEST_CONFIG = {
     "sim_em_file" : SIM_FILE,
@@ -33,12 +34,25 @@ TEST_CONFIG = {
     "wind_speed_col" : "windspeed",
     "wind_speed_unit" : "mps",
     "cutoff_col" : "cutoff",
-    "covered_productivity_file" : COVERED_PROD_FILE,
-    "covered_productivity_col" : "estimated productivity (vol/time)",
-    "covered_productivity_unit" : "mscf/day",
+    "covered_productivity_dist_file" : COVERED_PROD_FILE,
+    "covered_productivity_dist_col" : "estimated productivity (vol/time)",
+    "covered_productivity_dist_unit" : "mscf/day",
+    "total_covered_ngprod_mcfd" : 100_000,
     "num_wells_to_simulate" : 1000,
     "well_visit_count" : 1_000_000_000,
     "wells_per_site" : 3.14159,
+    "state_ghgi_file" : STATE_GHGI_FILENAME,
+    "ghgi_co2eq_unit" : "MMT/yr",
+    "enverus_state_production_file" : STATE_PROD_FILENAME,
+    "enverus_natnl_production_file" : NATNL_PROD_FILENAME,
+    "enverus_prod_unit" : "mscf/yr",
+    "ghgi_ch4emissions_ngprod_file" : NATNL_NGPROD_GHGI_FILENAME,
+    "ghgi_ch4emissions_ngprod_uncertainty_file" : NATNL_NGPROD_UNCERT_GHGI_FILENAME,
+    "ghgi_ch4emissions_petprod_file" : NATNL_PETPROD_GHGI_FILENAME,
+    "ghgi_ch4emissions_unit" : "kt/yr",
+    "year" : 1,
+    "state" : "State1",
+    "frac_aerial_midstream_emissions": 0.25,
     "frac_production_ch4" : .5,
     "stratify_sim_sample" : True,
     "n_mc_samples" : 100,

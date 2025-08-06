@@ -38,9 +38,9 @@ DUMMY_INPUT = {
         "wind_speed_col" : "wind_mps",
         "wind_speed_unit" : "mps",
         "cutoff_col" : None,
-        "covered_productivity_file" : None, # don't provide covered productivity. Really really difficult to backwards engineer for stratification
-        "covered_productivity_col" : None,
-        "covered_productivity_unit" : None,
+        "covered_productivity_dist_file" : None, # don't provide covered productivity. Really really difficult to backwards engineer for stratification
+        "covered_productivity_dist_col" : None,
+        "covered_productivity_dist_unit" : None,
         "state_ghgi_file" : STATE_GHGI_FILENAME,
         "ghgi_co2eq_unit" : "MMT/yr",
         "enverus_state_production_file" : STATE_PROD_FILE,

@@ -32,6 +32,7 @@ class CoveredProductionDataTests(TestCase):
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
+            1.,
         )
         np.testing.assert_equal(
             # Will be returned in COMMON_PRODUCTION_UNITS (mscf/day)
@@ -126,6 +127,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "FAKE COLUMN NAME",
                 "mscf/day",
+                1.
             )
         
         with self.assertRaises(ValueError):
@@ -133,6 +135,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 None,
+                1.
             )
 
     def test_ch4_mass_conversion(self):

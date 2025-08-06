@@ -106,6 +106,13 @@ class GHGIDataInput:
             production files. Numerator and denominator of this unit should 
             be separated with "/".
             Defaults to "mcf/yr".
+
+    Raises:
+        ValueError:
+            When the provided CH4 fraction of produced NG 
+            (`frac_production_ch4`) or fraction of midstream emissions that 
+            are aerially detectable (`frac_aerial_midstream_emissions`) aren't 
+            a number that's in [0,1].
     """
     def __init__(
             self,
@@ -138,7 +145,17 @@ class GHGIDataInput:
         
         self.year = year
         self.state = state
+        if not isinstance(frac_production_ch4,(float,int)) or not 0<=frac_production_ch4<=1.:
+            raise ValueError(
+                f"{frac_production_ch4 = } should be a value from 0 through 1"
+            )
         self.frac_production_ch4 = frac_production_ch4
+
+        if not isinstance(frac_aerial_midstream_emissions,(float,int)) or not 0<=frac_aerial_midstream_emissions<=1.:
+            raise ValueError(
+                f"{frac_aerial_midstream_emissions = } should be a value "
+                "from 0 through 1"
+            )
         self.frac_aerial_midstream_emissions = frac_aerial_midstream_emissions
         
         self.state_ghgi_unit = ghgi_co2eq_unit
