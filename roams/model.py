@@ -53,12 +53,19 @@ class ROAMSModel:
             type checking, and the assignment of defaults. For more 
             information, head on over to roams.input.ROAMSConfig to get more 
             information about what information is required.
-    """
-    def __init__(self,input_file : str | dict):
 
-        # Use the ROAMSConfig to read through the input JSON file
+        parser (ROAMSConfig, optional):
+            A class that is inherited (or is) ROAMSConfig, which will be used 
+            to read the input content. Inclusion of the parser here allows 
+            users to adopt new input behavior with inherited classes that have 
+            altered behavior.
+            Defaults to ROAMSConfig.
+    """
+    def __init__(self,input_file : str | dict, parser : ROAMSConfig = ROAMSConfig):
+
+        # Use the parser to read through the input JSON file
         # (or provided dictionary)
-        self.cfg = ROAMSConfig(input_file)
+        self.cfg = parser(input_file)
 
         ### Output specification
         # self.outfolder is a directory into which result tables will be 
