@@ -260,7 +260,7 @@ class GHGIDataInput:
 
         return midstream_em / total_emissions
 
-    def compute_state_midstream_lossrate(self) -> float:
+    def compute_state_lossrate(self) -> float:
         """
         Use the state-level GHGI estimate and Enverus state-level production 
         data to compute [CH4 lost in the state]/[CH4 produced in the state].
@@ -280,10 +280,10 @@ class GHGIDataInput:
         state_methane_emissions_ch4 = state_methane_emissions_co2eq/GWP_CH4
         state_methane_emissions_common = convert_units(state_methane_emissions_ch4,self.state_ghgi_unit,COMMON_EMISSIONS_UNITS)
         self.log.info(
-            f"Converted {state_methane_emissions_co2eq:,.2f} CO2eq of methane "
-            f"to {state_methane_emissions_ch4:,.2f} of actual CH4. This was "
-            f"then turned into {state_methane_emissions_common} "
-            f"{COMMON_EMISSIONS_UNITS} of CH4."
+            f"Converted {state_methane_emissions_co2eq:,.2f} {self.state_ghgi_unit} "
+            f"CO2eq of methane to {state_methane_emissions_ch4:,.2f} "
+            f"{self.state_ghgi_unit} of actual CH4. This was then turned into "
+            f"{state_methane_emissions_common} {COMMON_EMISSIONS_UNITS} of CH4."
         )
         
         # E.g. state_prod = 100000 mcf/yr
@@ -363,7 +363,7 @@ class GHGIDataInput:
         if not hasattr(self,"_total_midstream_ch4_loss_rate"):
 
             # State CH4 loss rate = [fugitive CH4 from NG production] / [All CH4 produced]
-            state_ch4_lossrate = self.compute_state_midstream_lossrate()
+            state_ch4_lossrate = self.compute_state_lossrate()
             self.log.info(
                 f"Estimated state methane loss is {state_ch4_lossrate:.3f}"
             )
