@@ -17,7 +17,8 @@ dependencies = [
     "numpy>=1.16.1",
     "matplotlib>=3.10.0",
     "openpyxl>=3.1.0",
-    "sqlalchemy",
+    "pyyaml>=6.0.0",
+    "sqlalchemy>=2.0.0",
 ]
 
 # Specify packages using setuptools find method

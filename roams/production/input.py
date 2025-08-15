@@ -124,9 +124,9 @@ class CoveredProductionDistData:
     @property
     def ch4_production_dist_volumetric(self) -> np.ndarray:
         """
-        Return covered well CH4 production provided in the underlying table, 
-        in units of COMMON_PRODUCTION_UNITS, which is a volumetric production 
-        rate.
+        Return the estimate of the CH4 production distribution provided in 
+        the underlying table, in units of COMMON_PRODUCTION_UNITS, 
+        which is a volumetric production rate.
 
         Returns:
             np.ndarray:
@@ -140,8 +140,8 @@ class CoveredProductionDistData:
     @property
     def ch4_production_dist_mass(self) -> np.ndarray:
         """
-        Return covered well CH4 production provided in the underlying table, 
-        in units of COMMON_EMISSIONS_UNITS
+        Return the estimate of the CH4 production distribution provided in 
+        the underlying table, in units of COMMON_EMISSIONS_UNITS.
 
         The mass units are taken from COMMON_EMISSIONS_UNITS.
 

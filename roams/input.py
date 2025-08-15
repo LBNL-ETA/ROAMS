@@ -1,7 +1,9 @@
 from datetime import datetime
 import logging
-import json
 from collections.abc import Iterable, Callable
+
+import yaml
+import numpy as np
 
 log = logging.getLogger("roams.input.ROAMSConfig")
 
@@ -210,7 +212,15 @@ class ROAMSConfig:
         if isinstance(config,str):
             log.info(f"Reading the input configuration from: {config}")
             with open(config,"r") as f:
-                config = json.load(f)
+                # Load content which may include non-JSON-safe windows paths ("C:\path\to\file.csv")
+                config = yaml.safe_load(f)
+        
+        # Apply global random seed ASAP
+        # This is important for any input classes that require resampling or 
+        # replacement before providing data to ROAMS model
+        seed = config.get("random_seed")
+        log.info(f"Setting seed with {seed = }")
+        np.random.seed(seed)
                 
         # Go through the required configs and assert that they exist, and 
         # that they're the correct type

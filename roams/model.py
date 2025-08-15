@@ -79,10 +79,6 @@ class ROAMSModel:
         # A dictionary attribute into which output tables will be put before writing
         self.table_outputs = dict()
 
-        # Set random numpy seed
-        self.log.debug(f"Setting the seed as {self.cfg.random_seed = }")
-        np.random.seed(self.cfg.random_seed)
-
         # Properties of surveyed infrastructure
         self.num_wells_to_simulate =    self.cfg.num_wells_to_simulate
         self.well_visit_count =         self.cfg.well_visit_count
@@ -103,7 +99,8 @@ class ROAMSModel:
                 simulated data for each monte carlo iteration.
             2. Use the ROAMS methodology to combine the simulated and aerial 
                 production data.
-            3. Summarize all the available information, to the degree 
+            3. Estimate the sub-detection-level midstream emissions
+            4. Summarize all the available information, to the degree 
                 specified, into the location specified.
         """
         self.make_samples()

@@ -126,8 +126,8 @@ def find_transition_point(
     # switches signs (i.e. where they match, approximately).
     diff = smooth_aerial_dist - smooth_simmed_dist
     
-    # Switch signs for any distributions that start negative, so that to 
-    # measure transition point we only worry about going from pos-to-neg
+    # Raise an error if any diffs start negative (we always expect 
+    # simulated to start above aerial).
     col_signs_to_switch = np.where(diff[0,:]<0)
     if len(col_signs_to_switch[0])>0:
         raise ValueError(
@@ -138,7 +138,7 @@ def find_transition_point(
         )
 
     # Always measure the transition point by where the sign switches
-    # (and with the above correction, only care about pos-to-negative switch.)
+    # from negative to positive (argmax returns first index of max)
     transition_point = np.argmax(diff>0,axis=0)
     
     # Take the x values at each first transition point.
