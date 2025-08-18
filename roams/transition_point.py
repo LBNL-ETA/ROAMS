@@ -50,10 +50,10 @@ def find_transition_point(
             corresponds to one monte-carlo iteration.
 
         smoothing_window (int, optional): 
-            The length of the moving-average window. The resulting smoothed 
-            timeseries will be cut off to only include values centered in 
-            the smoothing_window size. 
-            Defaults to 10.
+            The length of the moving-average window, given as an integer 
+            number of previous observations to use in determining the 
+            average ("smoothed") diff. Should be ≥1.
+            Defaults to 11.
 
     Raises:
         IndexError: 
@@ -76,12 +76,36 @@ def find_transition_point(
     """
     # Assert that the number of columns in all the inputs are identical
     # (Its intended that each column represents a unique monte-carlo run)
-    if (aerial_x.shape[1]!=sim_x.shape[1]) or (aerial_y.shape[1]!=sim_y.shape[1]) or (aerial_x.shape[1]!=aerial_y.shape[1]):
+    if (
+        (aerial_x.shape[1]!=sim_x.shape[1])
+        or (aerial_y.shape[1]!=sim_y.shape[1]) 
+        or (aerial_x.shape[1]!=aerial_y.shape[1])
+        ):
         raise IndexError(
             "The columns in the aerial and simulated x and y data are intended to "
             "both be the number of monte-carlo iterations, but the two "
             "tables have different numbers of columns. You should make sure "
             "the correct data is being passed."
+        )
+    
+    if (
+        (aerial_x.shape[0]!=aerial_y.shape[0])
+        or (sim_x.shape[0]!=sim_y.shape[0])
+        ):
+        raise IndexError(
+            "In at least one of the simulated or aerial [x,y] pairs, the "
+            "number of rows in x isn't the same as the number of rows in y. "
+            "You should check that the cumulative distributions are being "
+            "generated correctly from the underlying emissions values."
+        )
+    
+    # Assert that there are no NaN values (there's really no reason for there 
+    # to be)
+    if np.isnan(aerial_x).any() or np.isnan(aerial_y).any() or np.isnan(sim_x).any() or np.isnan(sim_y).any():
+        raise ValueError(
+            "There is a missing (np.nan) value in one of the inputs to "
+            "find_transition_point. The code can't deal with this, you'll "
+            "have to check what's going into the function."
         )
 
     n_mc_runs = aerial_x.shape[1]
@@ -98,15 +122,15 @@ def find_transition_point(
         a_x, a_y = aerial_x[:,mc_run], aerial_y[:,mc_run]
         interp_aerial_dist[:,mc_run] = np.interp(
             xs,
-            a_x[~np.isnan(a_x)],
-            a_y[~np.isnan(a_x)],
+            a_x,
+            a_y,
         )
         
         s_x, s_y = sim_x[:,mc_run], sim_y[:,mc_run]
         interp_simmed_dist[:,mc_run] = np.interp(
             xs,
-            s_x[~np.isnan(s_x)],
-            s_y[~np.isnan(s_x)],
+            s_x,
+            s_y,
         )
     
     # Make matrices intended to hold the moving-average smoothed derivatives (diffs)
@@ -126,12 +150,13 @@ def find_transition_point(
     # switches signs (i.e. where they match, approximately).
     diff = smooth_aerial_dist - smooth_simmed_dist
     
-    # Raise an error if any diffs start negative (we always expect 
-    # simulated to start above aerial).
-    col_signs_to_switch = np.where(diff[0,:]<0)
-    if len(col_signs_to_switch[0])>0:
+    # Raise an error if any diffs start positive (i.e. aerial diff starts 
+    # above that of the simulated distribution). Look at index 1 instead of 0 
+    # because the 0th row will always be all 0s
+    aerial_above_sim = np.where(diff[1,:]>0)
+    if len(aerial_above_sim[0])>0:
         raise ValueError(
-            f"In {len(col_signs_to_switch[0])} monte carlo iterations, the "
+            f"In {len(aerial_above_sim[0])} monte carlo iterations, the "
             "interpolated+smoothed aerial distribution starts *below* the "
             "interpolated and smoothed sub-detection-level sample. You should "
             "check that the smoothing and interpolating is correct."
