@@ -77,8 +77,36 @@ class GHGIDataInputTests(TestCase):
                 NATNL_PETPROD_GHGI_FILENAME,
                 1900,
                 "State1",
+                {"c1":1.5}, # Too large
+                .5, # Fine
+            )
+        
+        with self.assertRaises(ValueError):
+            g = GHGIDataInput(
+                STATE_GHGI_FILENAME,
+                STATE_PROD_FILENAME,
+                NATNL_PROD_FILENAME,
+                NATNL_NGPROD_GHGI_FILENAME,
+                NATNL_NGPROD_UNCERT_GHGI_FILENAME,
+                NATNL_PETPROD_GHGI_FILENAME,
+                1900,
+                "State1",
+                {"c1":-.1}, # Too small
+                .5, # Fine
+            )
+        
+        with self.assertRaises(ValueError):
+            g = GHGIDataInput(
+                STATE_GHGI_FILENAME,
+                STATE_PROD_FILENAME,
+                NATNL_PROD_FILENAME,
+                NATNL_NGPROD_GHGI_FILENAME,
+                NATNL_NGPROD_UNCERT_GHGI_FILENAME,
+                NATNL_PETPROD_GHGI_FILENAME,
+                1900,
+                "State1",
+                {"c1":.5}, # Fine
                 1.5, # Too large
-                .5, # Fine
             )
         
         with self.assertRaises(ValueError):
@@ -91,35 +119,7 @@ class GHGIDataInputTests(TestCase):
                 NATNL_PETPROD_GHGI_FILENAME,
                 1900,
                 "State1",
-                -.1, # Too small
-                .5, # Fine
-            )
-        
-        with self.assertRaises(ValueError):
-            g = GHGIDataInput(
-                STATE_GHGI_FILENAME,
-                STATE_PROD_FILENAME,
-                NATNL_PROD_FILENAME,
-                NATNL_NGPROD_GHGI_FILENAME,
-                NATNL_NGPROD_UNCERT_GHGI_FILENAME,
-                NATNL_PETPROD_GHGI_FILENAME,
-                1900,
-                "State1",
-                .5, # Fine
-                1.5, # Too large
-            )
-        
-        with self.assertRaises(ValueError):
-            g = GHGIDataInput(
-                STATE_GHGI_FILENAME,
-                STATE_PROD_FILENAME,
-                NATNL_PROD_FILENAME,
-                NATNL_NGPROD_GHGI_FILENAME,
-                NATNL_NGPROD_UNCERT_GHGI_FILENAME,
-                NATNL_PETPROD_GHGI_FILENAME,
-                1900,
-                "State1",
-                .5, # Fine
+                {"c1":.5}, # Fine
                 -.1, # Too small
             )
 
@@ -137,7 +137,7 @@ class GHGIDataInputTests(TestCase):
             NATNL_PETPROD_GHGI_FILENAME,
             1900,
             "State1",
-            0.0, # 0% of NG is CH4
+            {"c1":0.0}, # 0% of NG is CH4
             0.,  # 0% of midstream loss is aerial
         )
         # Total and sub-mdl CH4 emissions should be inf if 0% of NG production 
@@ -159,7 +159,7 @@ class GHGIDataInputTests(TestCase):
             NATNL_PETPROD_GHGI_FILENAME,
             1900,
             "State1",
-            1., # 100% of NG is CH4
+            {"c1":1.}, # 100% of NG is CH4
             0., # 0% of midstream loss is aerially measurable
         )
         hundredpct_ch4_loss_rate = g.total_midstream_ch4_loss_rate
@@ -173,7 +173,7 @@ class GHGIDataInputTests(TestCase):
             NATNL_PETPROD_GHGI_FILENAME,
             1900,
             "State1",
-            .5, # 50% of NG is CH4
+            {"c1":.5}, # 50% of NG is CH4
             0., # 0% of midstream loss is aerially measurable
         )
         # If 50% of NG is CH4, the loss rate is doubled compared to 100% 
@@ -196,7 +196,7 @@ class GHGIDataInputTests(TestCase):
             NATNL_PETPROD_GHGI_FILENAME,
             1900,
             "State1",
-            1., # 100% of NG is CH4
+            {"c1":1.}, # 100% of NG is CH4
             0.0,# 0% of midstream loss is aerial
         )
         hundredpct_submdl_frac = g.submdl_midstream_ch4_loss_rate
@@ -213,7 +213,7 @@ class GHGIDataInputTests(TestCase):
             NATNL_PETPROD_GHGI_FILENAME,
             1900,
             "State1",
-            1., # 100% of NG is CH4
+            {"c1":1.}, # 100% of NG is CH4
             .5, # 50% of midstream loss is aerially measurable
         )
         np.testing.assert_array_equal(
@@ -233,7 +233,7 @@ class GHGIDataInputTests(TestCase):
             NATNL_PETPROD_GHGI_FILENAME,
             1900,
             "State1",
-            1., # 100% of NG is CH4
+            {"c1":1.}, # 100% of NG is CH4
             1,  # 100% of midstream loss is aerially measurable
         )
         np.testing.assert_array_equal(
@@ -255,7 +255,7 @@ class GHGIDataInputTests(TestCase):
             NATNL_PETPROD_GHGI_FILENAME,
             1900,
             "State1",
-            1., # 100% of NG is CH4
+            {"c1":1.}, # 100% of NG is CH4
             0., # 0% of midstream loss is aerially measurable
         )
         # The value in 1900 for this state is 3.0 MMT CO2eq

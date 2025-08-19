@@ -32,7 +32,7 @@ class CoveredProductionDataTests(TestCase):
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
-            1.,
+            {"c1":1.},
         )
         np.testing.assert_equal(
             # Will be returned in COMMON_PRODUCTION_UNITS (mscf/day)
@@ -45,15 +45,16 @@ class CoveredProductionDataTests(TestCase):
     
     def test_ch4_frac_application(self):
         """
-        Assert that the argument `frac_production_ch4` is properly being 
-        treated as a volumetric fraction of CH4 in produced NG.
-        """        
+        Assert that the argument molar fraction of methan in the gas 
+        composition is properly being treated as a fraction of CH4 in 
+        produced NG.
+        """
         # If the volumetric fraction of CH4 is 0 -> should be 0 across the board
         coveredProdData = CoveredProductionDistData(
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
-            frac_production_ch4=0
+            gas_composition={"c1":0.},
         )
         np.testing.assert_equal(
             coveredProdData.ch4_production_dist_volumetric,
@@ -65,7 +66,7 @@ class CoveredProductionDataTests(TestCase):
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
-            frac_production_ch4=1.
+            gas_composition={"c1":1.}
         )
         np.testing.assert_equal(
             coveredProdData.ch4_production_dist_volumetric,
@@ -82,7 +83,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
-                frac_production_ch4=1.01,
+                gas_composition={"c1":1.01},
             )
         
         with self.assertRaises(ValueError):
@@ -90,7 +91,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
-                frac_production_ch4=-0.01,
+                gas_composition={"c1":-0.01},
             )
         
         with self.assertRaises(ValueError):
@@ -98,7 +99,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
-                frac_production_ch4=None,
+                gas_composition={"c1":None},
             )
         
         with self.assertRaises(ValueError):
@@ -106,7 +107,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
-                frac_production_ch4="0.5",
+                gas_composition={"c1":"0.5"},
             )
         
         with self.assertRaises(ValueError):
@@ -114,7 +115,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 "mscf/day",
-                frac_production_ch4="50%",
+                gas_composition={"c1":"50%"},
             )
 
     def test_missing_inputs(self):
@@ -127,7 +128,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "FAKE COLUMN NAME",
                 "mscf/day",
-                1.
+                {"c1":1.}
             )
         
         with self.assertRaises(ValueError):
@@ -135,7 +136,7 @@ class CoveredProductionDataTests(TestCase):
                 COVERED_PROD_FILE,
                 "estimated productivity (vol/time)",
                 None,
-                1.
+                {"c1":1.}
             )
 
     def test_ch4_mass_conversion(self):
@@ -148,7 +149,7 @@ class CoveredProductionDataTests(TestCase):
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/day",
-            frac_production_ch4=1.,
+            gas_composition={"c1":1.},
         )
         np.testing.assert_array_almost_equal(
             # will be returned in COMMON_EMISSIONS_UNITS (kg/h)
@@ -167,7 +168,7 @@ class CoveredProductionDataTests(TestCase):
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "mscf/h",
-            frac_production_ch4=1.,
+            gas_composition={"c1":1.},
         )
         np.testing.assert_array_almost_equal(
             # will be returned in COMMON_EMISSIONS_UNITS (kg/h)
@@ -186,7 +187,7 @@ class CoveredProductionDataTests(TestCase):
             COVERED_PROD_FILE,
             "estimated productivity (vol/time)",
             "m3/h",
-            frac_production_ch4=1.,
+            gas_composition={"c1":1.},
         )
         np.testing.assert_array_almost_equal(
             # will be returned in COMMON_EMISSIONS_UNITS (kg/h)

@@ -53,7 +53,7 @@ TEST_CONFIG = {
     "year" : 1,
     "state" : "State1",
     "frac_aerial_midstream_emissions": 0.25,
-    "frac_production_ch4" : .5,
+    "gas_composition" : {"C1":.5,"C2":.3,"C3":.1},
     "stratify_sim_sample" : True,
     "n_mc_samples" : 100,
     "prod_transition_point" : None,
@@ -111,6 +111,7 @@ class ROAMSInputTests(TestCase):
             "asset_col",
             "prod_asset_type",
             "midstream_asset_type",
+            "gas_composition",
             "coverage_count",
             "num_wells_to_simulate",
             "well_visit_count",
@@ -137,6 +138,7 @@ class ROAMSInputTests(TestCase):
             "asset_col",
             "prod_asset_type",
             "midstream_asset_type",
+            "gas_composition",
             "coverage_count",
             "num_wells_to_simulate",
             "well_visit_count",
@@ -147,6 +149,39 @@ class ROAMSInputTests(TestCase):
             newconfig[key] = None
             with self.assertRaises(ValueError):
                 c = ROAMSConfig(newconfig)
+    
+    def test_incorrect_gas_composition(self):
+        """
+        Assert that when the gas composition is misspecified, the ROAMSConfig 
+        complains appropriately.
+        """
+        newconfig = TEST_CONFIG.copy()
+        
+        # Negative total weight described -> should be ValueError
+        newconfig["gas_composition"] = {"C1":-1.}
+        with self.assertRaises(ValueError):
+            c = ROAMSConfig(newconfig)
+
+        # 0 total weight described -> should be ValueError
+        newconfig["gas_composition"] = {"C1":0.}
+        with self.assertRaises(ValueError):
+            c = ROAMSConfig(newconfig)
+        
+        # .79 total weight described -> should be ValueError
+        newconfig["gas_composition"] = {"C1":.79}
+        with self.assertRaises(ValueError):
+            c = ROAMSConfig(newconfig)
+        
+        
+        # 1.01 total weight described -> should be ValueError
+        newconfig["gas_composition"] = {"C1":1.01}
+        with self.assertRaises(ValueError):
+            c = ROAMSConfig(newconfig)
+        
+        # c1 is None -> should be ValueError
+        newconfig["gas_composition"] = {"C1":None,"C2":.9}
+        with self.assertRaises(ValueError):
+            c = ROAMSConfig(newconfig)
     
 if __name__=="__main__":
     import unittest

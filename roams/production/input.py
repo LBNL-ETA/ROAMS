@@ -36,9 +36,10 @@ class CoveredProductionDistData:
             production"), in terms of mcf of natural gas per day.
             E.g. 12345.67
 
-        frac_production_ch4 (float):
-            The fraction of NG that is CH4.
-            E.g. 0.9 
+        gas_composition (dict):
+            A dictionary of {component: molar fraction of NG} values to be 
+            used in characterizing produced natural gas.
+            E.g. {"c1":.7,"c2":.2,"c3":.05,"ic4":.01}
 
         loglevel (int, optional):
             The level to which information should be logged as this code 
@@ -47,8 +48,8 @@ class CoveredProductionDistData:
 
     Raises:
         ValueError:
-            When the given `frac_production_ch4` is not a number that's at 
-            least 0 and at most 1.
+            When the given fraction of methane in NG from `gas_composition` is 
+            not a number that's at least 0 and at most 1.
         
         KeyError:
             When the `covered_production_col` isn't in the provided data.
@@ -61,7 +62,7 @@ class CoveredProductionDistData:
         covered_production_dist_file : str,
         covered_production_dist_col : str,
         covered_production_dist_unit : str,
-        frac_production_ch4 : float,
+        gas_composition : dict,
         loglevel = logging.INFO,
     ):
         self.log = logging.getLogger("roams.production.input.CoveredProductionData")
@@ -75,9 +76,11 @@ class CoveredProductionDistData:
         self._raw_covered_prod_dist = pd.read_csv(self.covered_production_dist_file)
         self.log.debug(f"Raw simulated data has shape = {self._raw_covered_prod_dist.shape}")
 
+        frac_production_ch4 = gas_composition.get("c1")
         if not isinstance(frac_production_ch4,(float,int)) or (not 0<=frac_production_ch4<=1):
             raise ValueError(
-                f"{frac_production_ch4 = } should be a value from 0 through 1."
+                f"{gas_composition.get('c1') = } should be a value from 0 "
+                "through 1."
             )
         
         self.frac_production_ch4 = frac_production_ch4

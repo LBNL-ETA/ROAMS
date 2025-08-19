@@ -53,7 +53,7 @@ DUMMY_INPUT = {
         "year" : 1900,
         "state" : "TX",
         "frac_aerial_midstream_emissions": 0.25,
-        "frac_production_ch4" : .9,
+        "gas_composition" : {"C1":.90,"C2":.03,"C3":.03,"NC4":.01,"IC4":.01},
         "num_wells_to_simulate" : 1000,
         "well_visit_count" : 500,
         "wells_per_site" : 2.,

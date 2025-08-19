@@ -37,6 +37,7 @@ _REQUIRED_CONFIGS = {
     "coverage_count" : str,
         
     # Attributes of covered region (not derived here)
+    "gas_composition" : dict,
     "num_wells_to_simulate" : int,
     "well_visit_count" : int,
     "wells_per_site" : float,
@@ -84,7 +85,6 @@ _DEFAULT_CONFIGS = {
     # Algorithmic input defaults
     # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
     "random_seed" : None,
-    "frac_production_ch4" : ALVAREZ_ET_AL_CH4_FRAC,
     "stratify_sim_sample" : True,
     "n_mc_samples" : 100,
     "prod_transition_point" : None,
@@ -262,6 +262,38 @@ class ROAMSConfig:
                     "Did you misspecify an input value?"
                 )
 
+        # lower() all the keys of gas composition
+        lower_composition = {k.lower() : v for k,v in self.gas_composition.items()}
+        self.gas_composition = lower_composition
+
+        # Assert that methane composition is provided, and is numeric
+        if not isinstance(self.gas_composition.get("c1"),(float,int)):
+            raise ValueError(
+                "The code expects that your gas composition dictionary at "
+                "least includes methane ('c1') as a float/int. But that's not "
+                "what was provided."
+            )
+        
+        # Assert that at least 80% of NG composition is accounted for in 
+        # the gas composition dictionary, and no more than 100%
+        if sum(self.gas_composition.values()) < .80:
+            raise ValueError(
+                f"The gas composition (= {self.gas_composition}) in your "
+                "input file accounts for less than 80% of the molar "
+                "composition of gas. You should probably provide more "
+                "descriptive gas composition estimates to get a more faithful "
+                "fractional energy loss."
+            )
+
+        # Assert that gas composition fractions don't add to >1
+        if sum(self.gas_composition.values())>1.:
+            raise ValueError(
+                f"The gas composition (= {self.gas_composition}) in your "
+                "input file accounts adds up to more than 100%. The values "
+                "in the dictionary should be fractions (<=1), not "
+                "percentage values out of 100."
+            )
+        
         self._config = config.copy()
         
         # Do some after-the-fact assignment with specific behaviors   
@@ -275,7 +307,7 @@ class ROAMSConfig:
                 covered_production_dist_file = self.covered_productivity_dist_file,
                 covered_production_dist_col = self.covered_productivity_dist_col,
                 covered_production_dist_unit = self.covered_productivity_dist_unit,
-                frac_production_ch4 = self.frac_production_ch4,
+                gas_composition = self.gas_composition,
                 loglevel = self.loglevel,
             )
         else:
@@ -320,7 +352,7 @@ class ROAMSConfig:
             self.ghgi_ch4emissions_petprod_file,
             self.year,
             self.state,
-            self.frac_production_ch4,
+            self.gas_composition,
             frac_aerial_midstream_emissions=self.frac_aerial_midstream_emissions,
             ghgi_co2eq_unit=self.ghgi_co2eq_unit,
             ghgi_ch4emissions_unit=self.ghgi_ch4emissions_unit,
@@ -417,7 +449,7 @@ class ROAMSConfig:
                 COMMON_EMISSIONS_UNITS) in the covered region.
         """
         ch4_mcf_per_day = (
-            self.frac_production_ch4
+            self.gas_composition["c1"]
             * self.total_covered_ngprod_mcfd
         )
         
@@ -439,7 +471,7 @@ class ROAMSConfig:
                 COMMON_EMISSIONS_UNITS) in the covered region.
         """
         ch4_mcf_per_day = (
-            self.frac_production_ch4
+            self.gas_composition["c1"]
             * self.total_covered_ngprod_mcfd
         )
         

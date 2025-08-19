@@ -83,8 +83,10 @@ class GHGIDataInput:
             value specifically has to exist in the first column of 
             `state_ghgi_file`.
         
-        frac_ch4_production (float): 
-            The fraction of produced natural gas that's CH4.
+        gas_composition (dict): 
+            A dictionary describing the composition of produced gas in the 
+            provided datasets. The code will care about the "c1" (methane) 
+            entry.
         
         frac_aerial_midstream_emissions (float): 
             The fraction of the total estimated midstream emissions that 
@@ -110,7 +112,7 @@ class GHGIDataInput:
     Raises:
         ValueError:
             When the provided CH4 fraction of produced NG 
-            (`frac_production_ch4`) or fraction of midstream emissions that 
+            (in `gas_composition`) or fraction of midstream emissions that 
             are aerially detectable (`frac_aerial_midstream_emissions`) aren't 
             a number that's in [0,1].
     """
@@ -124,7 +126,7 @@ class GHGIDataInput:
             ghgi_ch4emissions_petprod_file : str,
             year : int,
             state : str,
-            frac_production_ch4 : float,
+            gas_composition : dict,
             frac_aerial_midstream_emissions : float,
             ghgi_co2eq_unit = "MMT/yr",
             ghgi_ch4emissions_unit = "kt/yr",
@@ -145,9 +147,11 @@ class GHGIDataInput:
         
         self.year = year
         self.state = state
+        frac_production_ch4 = gas_composition.get("c1")
         if not isinstance(frac_production_ch4,(float,int)) or not 0<=frac_production_ch4<=1.:
             raise ValueError(
-                f"{frac_production_ch4 = } should be a value from 0 through 1"
+                f"{gas_composition.get('c1') = } should be a value from 0 "
+                "through 1."
             )
         self.frac_production_ch4 = frac_production_ch4
 
