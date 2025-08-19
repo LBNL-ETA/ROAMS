@@ -111,6 +111,11 @@ class AerialSurveyDataTests(TestCase):
         self.assertEqual(
             len(survey.production_plume_emissions),2
         )
+        self.assertEqual(
+            # Index 2 should be source_id=3, which had a cut off plume
+            survey._raw_source.loc[2,"coverage_count"]
+            ,3
+        )
 
         # Create a survey not pointing at the "cutoff" column
         # (should have 2 midstream plumes)

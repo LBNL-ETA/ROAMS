@@ -178,12 +178,70 @@ class TransitionPointTests(TestCase):
         # of aerial dummy data.)
         np.testing.assert_array_equal(tp,np.array([16]*n))
 
+    def test_translation(self):
+        """
+        Assert that translation left/right of emissions size values (x values) 
+        translates the transition point in the same way, and that translation 
+        up/down (or scaling) of cumulative emissions has no effect.
+        """
+        # 10 columns
+        n = 10
+
+        # Emissions size
+        sim_xs = np.array([13.,14.,15,16.,17.])
+        sim_x = np.tile(sim_xs,(n,1)).T
+        
+        ### Find transition point without translation
+        # Sim data will be based on the cumulative distribution of 
+        # these emissions
+        # Over the range [13,17], drops at a slope of 2, then .5
+        sim_data = sim_x.cumsum(axis=0)[::-1]
+        sim_data[:2,:]*=2.  # Before 15: 2x slope 
+        sim_data[3:,:]*=.5  # ≥15: half the slope (makes for large slope value at 15)
+
+        # Over the range [13,17], drops at a slope of 1
+        aerial_xs = sim_xs
+        aerial_x = np.tile(aerial_xs,(n,1)).T
+        aerial_data = aerial_x.cumsum(axis=0)[::-1]
+        
+        # tp = original transition point. In this test, we don't care what 
+        # this value is, only how it translates.
+        tp = find_transition_point(
+            aerial_x,
+            aerial_data,
+            sim_x,
+            sim_data,
+            smoothing_window=1
+        )
+        
+        # When cumulative dists are +100, doesn't change TP because only the 
+        # diff informs the transition point
+        tp_new = find_transition_point(
+            aerial_x,
+            aerial_data+100,
+            sim_x,
+            sim_data+100,
+            smoothing_window=1
+        )
+        np.testing.assert_array_equal(tp_new,tp)
+        
+        # When cumulative dists are both x2, doesn't change TP because only 
+        # the diff informs the transition point.
+        tp_new = find_transition_point(
+            aerial_x,
+            aerial_data*2,
+            sim_x,
+            sim_data*2,
+            smoothing_window=1
+        )
+        np.testing.assert_array_equal(tp_new,tp)
+        
         # Do everything over again, but with the x values translated.
         # Should just shift the transition point to the right by 100
-        sim_xs += 100
+        new_sim_xs = sim_xs + 100
         
         # n columns
-        sim_x = np.tile(sim_xs,(n,1)).T
+        sim_x = np.tile(new_sim_xs,(n,1)).T
         
         # Sim data will be based on the cumulative distribution of 
         # these emissions
@@ -193,20 +251,19 @@ class TransitionPointTests(TestCase):
         sim_data[3:,:]*=.5  # ≥15: half the slope
 
         # Over the range [13,17], drops at a slope of 1
-        aerial_xs = sim_xs
+        aerial_xs = new_sim_xs
         aerial_x = np.tile(aerial_xs,(n,1)).T
         aerial_data = aerial_x.cumsum(axis=0)[::-1]
         
         # Use a smoothing window of 1 to make the intuition much easier
-        tp = find_transition_point(
+        tp_new = find_transition_point(
             aerial_x,
             aerial_data,
             sim_x,
             sim_data,
             smoothing_window=1
         )
-        
-        np.testing.assert_array_equal(tp,np.array([16+100]*n))
+        np.testing.assert_array_equal(tp_new,tp+100)
         
 
 if __name__=="__main__":

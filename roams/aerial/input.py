@@ -366,8 +366,8 @@ class AerialSurveyData:
             # Reduce the coverage count for each source with a cut off plume.
             for source_id in source_ids.index:
                 count = source_ids.loc[source_id,count_col]
-                self.loc[
-                    (self._raw_source.loc[self.source_id_col]==source_id),
+                self._raw_source.loc[
+                    (self._raw_source[self.source_id_col]==source_id),
                     self.coverage_count
                 ] -= count
 
