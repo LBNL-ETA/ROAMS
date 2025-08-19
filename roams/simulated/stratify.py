@@ -1,9 +1,13 @@
+import logging
+
 import numpy as np
 import pandas as pd
 
 # QUANTILES = bins in deciles from 0 -> 50th percentile, then 5% bins up to 95th percentile.
 # 1% size bins 95 -> 99, then one .5% bin, then .1% bins to 100.
 QUANTILES =  (0,.1,.2,.3,.4,.5,.55,.6,.65,.7,.75,.8,.85,.9,.95,.96,.97,.98,.99,.995,.996,.997,.998,.999,1.)
+
+log = logging.getLogger("roams.aerial.stratify.stratify_sample")
 
 def stratify_sample(
         sim_emissions : np.ndarray,
@@ -97,9 +101,22 @@ def stratify_sample(
 
         # Scale the total number to match the n_infra you want
         * n_infra/len(covered_productivity)
+    )
+
+    if prod_count_by_bin[prod_count_by_bin<.5].sum()/n_infra >=.20:
+        raise ValueError(
+            f"At least 20% of {n_infra = } samples are supposed to be drawn "
+            "from quantile bins that have so little weight, they'll be "
+            "rounded down to 0 samples, leaving remaining bins over-"
+            "represented. You probably should choose a different `quantile` "
+            "value or revisit the provided simulated production/emissions "
+            "data."
+        )
     
-    # round the result and return it as an int.
-    ).round().astype(int)
+    # round the result and return it as an int. Use (x+.5).astype(int) to get
+    # closest integer rounding, not closest even integer rounding as 
+    # implemented in numpy (astype(int) takes floor value).
+    prod_count_by_bin = (prod_count_by_bin+.5).astype(int)
 
     # Because due to rounding there may be ± a few compared to the length we want (n_infra)
     # Change the value in the largest bin to correct for this.

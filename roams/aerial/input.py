@@ -328,11 +328,55 @@ class AerialSurveyData:
         if cutoff_handling=="drop":
             self.log.info(
                 f"The code will drop plumes with '{self._cutoff_col}'=True "
-                "in the plume table."
+                "in the plume table, and decrement the coverage count before "
+                "removing sources with 0 remaining coverage counts."
             )
+            # Pick out all the cut off plumes
+            cutoff_plumes = self._raw_plumes.loc[
+                self._raw_plumes[self._cutoff_col]
+            ]
+            self.log.debug(
+                f"There are {len(cutoff_plumes)} cut off plumes in the entire "
+                "dataset."
+            )
+            # Remove cutoff plumes from the plume dataset
             self._raw_plumes = self._raw_plumes.loc[
                 ~self._raw_plumes[self._cutoff_col]
             ]
+            
+            # E.g. count_col = "Wind Normalized Emissions (kgh/mps)"
+            if self._wind_norm_col in self._raw_plumes.columns:
+                count_col = self._wind_norm_col
+            else:
+                count_col = self._em_col
+
+            # Count the number of `count_col` observations for each 
+            # source ID.
+            source_ids = (
+                cutoff_plumes
+                .groupby(self.source_id_col)
+                [[count_col]]
+                .count()
+            )
+            self.log.debug(
+                f"There are {len(source_ids)} unique sources with at least "
+                "one cutoff."
+            )
+
+            # Reduce the coverage count for each source with a cut off plume.
+            for source_id in source_ids.index:
+                count = source_ids.loc[source_id,count_col]
+                self.loc[
+                    (self._raw_source.loc[self.source_id_col]==source_id),
+                    self.coverage_count
+                ] -= count
+
+            # Remove the sources with 0 coverage count remaining
+            self._raw_source = self._raw_source.loc[
+                self._raw_source[self.coverage_count]>0
+            ]
+        # if cutoff_handling == "resample":
+        #      ...
         
         else:
             raise ValueError(
