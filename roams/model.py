@@ -608,7 +608,7 @@ class ROAMSModel:
                 name += ".csv"
             
             self.log.info(f"Saving {name} to {self.outfolder}")
-            table.to_csv(os.path.join(self.outfolder,name))
+            table.to_csv(os.path.join(self.outfolder,name),index=False)
         
         self.gen_plots()
 
@@ -782,7 +782,7 @@ class ROAMSModel:
         prod_and_mid_summary.loc[f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb_abovetp)[quantity_cols].values
 
         # Put the resulting table into self.table_outputs
-        self.table_outputs["Production and Midstream Summary"] = prod_and_mid_summary
+        self.table_outputs["Production and Midstream Summary"] = prod_and_mid_summary.reset_index()
     
     def make_prod_distr_summary(self):
         """
@@ -797,9 +797,7 @@ class ROAMSModel:
         cumsum_y = 100*(1-cumsum_y/cumsum_y.max(axis=0)).mean(axis=1)
         dist_x = self.combined_samples.mean(axis=1)
 
-        dist_summary = pd.DataFrame(
-            columns=["Emissions Value","Cumulative Distribution Percentile"]
-        )
+        dist_summary = pd.DataFrame()
         
         # Where the first 10% of emissions have been accounted for
         tenth_pctl = np.argmin(cumsum_y>90)
@@ -841,6 +839,7 @@ class ROAMSModel:
             inplace=True,
             ascending=True
         )
+        dist_summary.reset_index(drop=True,inplace=True)
 
         # Put the resulting table into self.table_outputs
         self.table_outputs["Combined Production Distribution Summary"] = dist_summary

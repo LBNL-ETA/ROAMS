@@ -18,7 +18,7 @@ def find_transition_point(
 
     This function will interpolate the cumulative emissions distribution for 
     both aerial emissions data and simulated emissions data into the same 
-    [1, 1000] kgh range for each monte carlo sample (the columns of the 
+    [5, 1000] kgh range for each monte carlo sample (the columns of the 
     aerial data), and after smoothing the diffs in those interpolated timeseries,
     return the values for each MC iteration where the difference between the 
     two smoothed diffs changes sign (i.e. where the derivatives of the cumulative 
