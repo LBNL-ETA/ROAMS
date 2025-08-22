@@ -81,7 +81,6 @@ class ROAMSModel:
         self.table_outputs = dict()
 
         # Properties of surveyed infrastructure
-        self.num_wells_to_simulate =    self.cfg.num_wells_to_simulate
         self.well_visit_count =         self.cfg.well_visit_count
         self.wells_per_site =           self.cfg.wells_per_site
         
@@ -155,7 +154,7 @@ class ROAMSModel:
                 self.cfg.prodSimResults.simulated_emissions,
                 self.cfg.prodSimResults.simulated_production,
                 self.cfg.coveredProductivity.ng_production_dist_volumetric,
-                n_infra=self.num_wells_to_simulate
+                n_infra=self.cfg.num_wells_to_simulate
             )
         else:
             sub_mdl_dist = self.cfg.prodSimResults.simulated_emissions
@@ -163,11 +162,11 @@ class ROAMSModel:
         # Sample the stratified representation for each monte carlo iteration
         self.log.info(
             "Sampling simulated emissions data into a "
-            f"{self.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
+            f"{self.cfg.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
         )
         sub_mdl_sample = np.random.choice(
             sub_mdl_dist,
-            (self.num_wells_to_simulate,self.cfg.n_mc_samples),
+            (self.cfg.num_wells_to_simulate,self.cfg.n_mc_samples),
             replace=True
         )
         sub_mdl_sample.sort(axis=0)
@@ -234,7 +233,7 @@ class ROAMSModel:
                 sampled for each source) and corresponding wind-normalized 
                 emissions. Each will have self.cfg.n_mc_samples columns, and 
                 a number of rows equal to the total number of estimated 
-                wells in the region of interest (self.num_wells_to_simulate). 
+                wells in the region of interest (self.cfg.num_wells_to_simulate). 
                 The entries in each are aligned, such that the [i,j]th entry 
                 in each table corresponds to the same original sampled 
                 plume observation in the jth monte-carlo iteration.
@@ -244,7 +243,7 @@ class ROAMSModel:
         )
         self.log.info(
             f"The aerial production sample is size={prod_aerial_em_sample.shape}, "
-            f"and will be put into a table with {self.num_wells_to_simulate} "
+            f"and will be put into a table with {self.cfg.num_wells_to_simulate} "
             "rows (with 0-padding)."
         )
         self.log.debug(
@@ -434,7 +433,7 @@ class ROAMSModel:
     def combine_prod_samples(self):
         """
         Combine the aerial and simulated distributions into a new attribute 
-        called `self.combined_samples` which will have self.num_wells_to_simulate
+        called `self.combined_samples` which will have self.cfg.num_wells_to_simulate
         rows and self.cfg.n_mc_samples columns.
           
         It creates this with aerial sampled data, partial detection emissions, 
@@ -442,16 +441,16 @@ class ROAMSModel:
         these should be in the form of:
             
             * `self.prod_tot_aerial_sample` : 
-                A (self.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
+                A (self.cfg.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
                 sampled, corrected, and perhaps noised aerial observations,
                 where intermittency has also been taken into account.
             * `self.prod_partial_detection_emissions` : 
-                A (self.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
+                A (self.cfg.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
                 estimated extra emissions from the entire basin under study, 
                 intended to reflect the "missed" emissions from the partial 
                 detection correction.
             * `self.simulated_sample` : 
-                A (self.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
+                A (self.cfg.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
                 sampled simulated emissions, which should have already been 
                 stratified if relevant.
 
@@ -532,7 +531,7 @@ class ROAMSModel:
                     f"{len(sim_below_transition)} simulated emissions values "
                     f"below the transition point (={tp}), but "
                     f"{idx_above_transition} infrastructure sites to try to "
-                    f"simulate (out of {self.num_wells_to_simulate} total). "
+                    f"simulate (out of {self.cfg.num_wells_to_simulate} total). "
                     "The code usually fills each such site by choosing with "
                     "replacement from the available simulated emissions, but "
                     "in this case the code doesn't know what to do without "
@@ -914,7 +913,7 @@ class ROAMSModel:
         quantiles = np.quantile(values,self._quantiles)
         
         # Denominator = sqrt(Total site visits including re-visits / total sites to simulate)
-        denominator = np.sqrt((self.well_visit_count/self.wells_per_site)/self.num_wells_to_simulate)
+        denominator = np.sqrt((self.well_visit_count/self.wells_per_site)/self.cfg.num_wells_to_simulate)
         for q, val in zip(self._quantiles, quantiles):
             diff = abs(output["Avg"]-val) / denominator
 
@@ -980,7 +979,7 @@ class ROAMSModel:
         
         # Define factor for translating observed percentiles to confidence
         # intervals
-        denominator = np.sqrt((self.well_visit_count/self.wells_per_site)/self.num_wells_to_simulate)
+        denominator = np.sqrt((self.well_visit_count/self.wells_per_site)/self.cfg.num_wells_to_simulate)
         
         # Make copies of zero-padded aerial and partial detection emissions.
         aerial_em = self.prod_tot_aerial_sample.copy()
