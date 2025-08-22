@@ -58,6 +58,7 @@ DUMMY_INPUT = {
         "well_visit_count" : 500,
         "wells_per_site" : 2.,
         "total_covered_ngprod_mcfd": 1_000_000,
+        "total_covered_oilprod_bbld": 10_000,
         "random_seed": 1,
         "stratify_sim_sample" : False,
         "n_mc_samples" : 100,

@@ -42,6 +42,7 @@ _REQUIRED_CONFIGS = {
     "well_visit_count" : int,
     "wells_per_site" : float,
     "total_covered_ngprod_mcfd" : (float,int),
+    "total_covered_oilprod_bbld" : (float,int),
 
     # Midstream required GHGI inputs
     "state_ghgi_file" : str,

@@ -7,13 +7,14 @@ import numpy as np
 
 from matplotlib import pyplot as plt
 
-from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS
+from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS, COMMON_ENERGY_UNITS
 from roams.conf import RESULT_DIR
 
 from roams.input import ROAMSConfig
 
 from roams.simulated.stratify import stratify_sample
 from roams.transition_point import find_transition_point
+from roams.utils import energycontent_mj_mcf, MJ_PER_BOE, ENERGY_DENSITY_MJKG, convert_units
 
 class ROAMSModel:
     """
@@ -651,7 +652,9 @@ class ROAMSModel:
             f"Covered Production (CH4 {COMMON_PRODUCTION_UNITS})" : [np.nan],
             f"Covered Production (CH4 {COMMON_EMISSIONS_UNITS})" : [np.nan],
             f"Mean fractional CH4 Loss in production ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)":[np.nan],
-            f"Mean fractional CH4 Loss in midstream ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)":[np.nan]
+            f"Mean fractional CH4 Loss in midstream ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)":[np.nan],
+            f"Mean fractional Energy Loss in production ({COMMON_ENERGY_UNITS} lost / {COMMON_ENERGY_UNITS} produced)":[np.nan],
+            f"Mean fractional Energy Loss in midstream ({COMMON_ENERGY_UNITS} lost / {COMMON_ENERGY_UNITS} produced)":[np.nan]
         })
 
         # Fill with a single value: total covered volumetric and mass productivity of CH4
@@ -678,6 +681,7 @@ class ROAMSModel:
             ).mean()/1e3
         )
         
+        # midstream loss = sub-MDL emissions + aerial (above MDL) emissions
         midstream_lost_emiss = (
             self.submdl_ch4_midstream_emissions["mid"]
             + midstream_aerial_em_abovetp
@@ -686,6 +690,47 @@ class ROAMSModel:
         # Volumetric midstream fractional loss = [sub-mdl estimate + above-tp aerial total emissions rate] / [covered productivity production rate]
         result[f"Mean fractional CH4 Loss in midstream ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)"] = (
             midstream_lost_emiss/self.cfg.ch4_total_covered_production_mass
+        )
+
+        # Fractional Energy Loss denominator = 
+        #   Energy produced per day, total from oil + gas
+        #   (MJ/d)
+        energy_loss_denominator = (
+            # Bbl oil -> MJ
+            self.cfg.total_covered_oilprod_bbld * MJ_PER_BOE + 
+            
+            # Mcf NG -> MJ
+            self.cfg.total_covered_ngprod_mcfd * energycontent_mj_mcf(self.cfg.gas_composition)
+        )
+        # Fractional Energy Loss production numerator = 
+        #   [Energy content of production CH4 emissions]
+        
+        # E.g. Desired emissions unit = "kg/d" (same time horizon as produced energy)
+        desired_num_unit = COMMON_EMISSIONS_UNITS.split("/")[0] + "/d"
+        prod_energy_loss_num = (
+            # MJ/kg of CH4
+            ENERGY_DENSITY_MJKG["c1"] 
+            # x kgCH4/h <- COMMON_EMISSIONS_UNITS
+            * (
+                self.combined_samples.sum(axis=0).mean() 
+                + self.prod_partial_detection_emissions.sum(axis=0).mean()
+            )
+            # x [24 kg/d per 1 kg/h]
+            * convert_units(1,COMMON_EMISSIONS_UNITS,desired_num_unit)
+        )
+        
+        # Fractional energy loss = [embodied energy of emitted CH4]/(embodied energy of produced gas + oil)
+        
+        result[f"Mean fractional Energy Loss in production ({COMMON_ENERGY_UNITS} lost / {COMMON_ENERGY_UNITS} produced)"] = (
+            prod_energy_loss_num / energy_loss_denominator
+        )
+        result[f"Mean fractional Energy Loss in midstream ({COMMON_ENERGY_UNITS} lost / {COMMON_ENERGY_UNITS} produced)"] = (
+            (
+                midstream_lost_emiss 
+                * ENERGY_DENSITY_MJKG["c1"] 
+                * convert_units(1,COMMON_EMISSIONS_UNITS,desired_num_unit)
+            )
+            / energy_loss_denominator
         )
 
         self.table_outputs["Fractional Loss Summary"] = result

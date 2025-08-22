@@ -1,3 +1,7 @@
+import logging
+
+log = logging.getLogger("roams.utils")
+
 # 1 meter per second = 2.23694 miles per hour
 MPH_PER_MPS = 2.23694
 
@@ -14,6 +18,41 @@ CH4_DENSITY_KGM3 = CH4_DENSITY_KGCUFT * CUFT_PER_M3 # [kg/cuft]*[35.3147 cuft/1 
 # CO2 equivalent warming potential of CH4
 # (Per IPCC AR4, was revised higher in later estimates)
 GWP_CH4 = 25.
+
+# MCF of NG per kmol NG
+# (GPSA. Section 1 general information. In Engineering Data Book, 13th Edition (Electronic) Volume I II. United States, 2011.)
+NG_MCF_KMOL = .83656
+
+# Megajoules per barrel crude oil equivalent
+# Per EIA calculator (https://www.eia.gov/energyexplained/units-and-calculators/energy-conversion-calculators.php), Aug 2025, last updated Oct 2024
+MJ_PER_BOE = 5996.94
+
+# Energy density in MJ/kg of each NG component
+ENERGY_DENSITY_MJKG = {
+    "c1": 55.5,
+    "c2": 51.9,
+    "c3": 50.4,
+    "nc4": 49.1,
+    "ic4": 49.1,
+    "nc5": 48.6,
+    "ic5": 48.6,
+    "c6+": 47.743,
+    "h2s": 17.396,
+    "h2": 141.7,
+}
+
+MOLAR_DENSITY_KGKMOL = {
+    "c1": 16.043,
+    "c2": 30.07,
+    "c3": 44.1,
+    "nc4": 58.12,
+    "ic4": 58.12,
+    "nc5": 72.15,
+    "ic5": 72.15,
+    "c6+": 86.18,
+    "h2s": 34.08,
+    "h2": 2.016,
+}
 
 # A dictionary of unit : conversion to kg/h, where each dictionary value 
 # represents the amount of that unit in one kg/h. The unit of tons here is 
@@ -171,3 +210,62 @@ def ch4_volume_to_mass(value, unit_in : str, unit_out : str):
 
     # Return the converted emissions rate from kg/<time in> to unit_out
     return convert_units(kg,f"kg/{t_in}",unit_out)
+
+def energycontent_mj_mcf(gas_composition : dict) -> float:
+    """
+    Take a natural gas composition dictionary, and return the volumetric 
+    energy density, in MJ per mcf.
+
+    Args:
+        gas_composition (dict):
+            A dictionary of {gas : fraction} pairs whose keys are the chemical
+            components of natural gas. No more than 20% of the weights 
+            provided in this dictionary should belong to gases without 
+            available energy density and molar density information.
+
+    Raises:
+        KeyError:
+            When >20% of the provided molar composition of NG isn't 
+            accounted for in terms of energy content.
+
+    Returns:
+        float: 
+            The composition-weighted energy density of a given natural gas 
+            composition, in MJ/MCF.
+    """
+    # Missing keys = chemical components that won't be captured by this 
+    # computation
+    # E.g. missing_keys = ["c7","c8"]
+    missing_keys = [
+        key for key in gas_composition.keys()
+        if (key not in ENERGY_DENSITY_MJKG.keys()) or (key not in MOLAR_DENSITY_KGKMOL.keys())
+    ]
+    
+    # E.g. missing_weight = gas_composition["c7"] + gas_composition["c8"]
+    missing_weight = sum([gas_composition[key] for key in missing_keys])
+
+    # Raise an error if >20% of molar composition is from gases that aren't 
+    # known in the energy and molar density records.
+    if missing_weight>.2:
+        raise KeyError(
+            f"There are gases in the given composition ({missing_keys}) "
+            "that don't have a known energy density or molar density, that "
+            "make up more than 20% of your composition. "
+            f"The only available gases are: {MOLAR_DENSITY_KGKMOL.keys()}."
+        )
+    
+    # Log a warning if there's >0 missing gases, but their collective weight 
+    # doesn't trigger an error.
+    if len(missing_keys)>0:
+        log.warning(
+            f"Some gases in the given gas composition ({missing_keys}) don't "
+            "exist in the energy density and molar density records. "
+            f"The only available gases are: {MOLAR_DENSITY_KGKMOL.keys()}."
+        )
+
+    return sum(
+        [
+            frac*ENERGY_DENSITY_MJKG[gas]*MOLAR_DENSITY_KGKMOL[gas]/NG_MCF_KMOL
+            for gas, frac in gas_composition.items()
+        ]
+    )
