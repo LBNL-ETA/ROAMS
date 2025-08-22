@@ -3,6 +3,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from roams.constants import COMMON_PRODUCTION_UNITS
+
 # QUANTILES = bins in deciles from 0 -> 50th percentile, then 5% bins up to 95th percentile.
 # 1% size bins 95 -> 99, then one .5% bin, then .1% bins to 100.
 QUANTILES =  (0,.1,.2,.3,.4,.5,.55,.6,.65,.7,.75,.8,.85,.9,.95,.96,.97,.98,.99,.995,.996,.997,.998,.999,1.)
@@ -35,13 +37,13 @@ def stratify_sample(
             representative of the infrastructure covered in the survey.
 
         sim_production (np.ndarray):
-            Simulated production (mscf/day), whose values correspond index-wise
-            to those in sim_emissions.
+            Simulated production, whose values correspond index-wise to those 
+            in sim_emissions. Should be in units identical to 
+            `covered_productivity`.
 
         covered_productivity (np.ndarray):
             A 1-d array representing the best estimate of actual production 
-            in the surveyed area, in mscf/day (or at least units identical 
-            to those in sim_production).
+            in the surveyed area, in identical units to `sim_production`.
 
         n_infra (int):
             The size of the resulting array to return, intended to represent 
@@ -70,6 +72,16 @@ def stratify_sample(
             f"{len(sim_production)} simulated production values. They should be "
             "the same - each index representing a value from the same simulated "
             "infrastructure."
+        )
+    
+    if covered_productivity.max()>sim_production.max():
+        log.warning(
+            "The maximum covered productivity value "
+            f"({covered_productivity.max()} {COMMON_PRODUCTION_UNITS}) is "
+            "above the maximum simulated production value "
+            f"({sim_production.max()} {COMMON_PRODUCTION_UNITS}). This could "
+            "mean that the simulated emissions associated to the largest "
+            "production bin will be over-represented."
         )
     
     # Get the simulated production quantiles (we will count the relative distribution of production in these bins)
