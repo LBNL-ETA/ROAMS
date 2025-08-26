@@ -37,6 +37,24 @@ After calling `perform_analysis()`, the model that's ran will produce a folder i
 
 To get started with creating your own input file, read the [input file structure section](#input-file-format)
 
+## Tests and Validation
+
+A collection of unit tests exist to help verify that individual and collected components of the codebase are acting as intended. You can run the unit tests from the root of the repository with:
+
+```
+python -m unittest
+```
+
+These tests cover a lot of specific behavior (e.g. the data parsing of each input class), and also functional behavior (e.g. the outcome of the transition point computation). In addition, a small validation exercise is ran on dummy data using a deterministic version of the `ROAMSModel`, in which the tests will assert that it produces some very specific numerical results.
+
+It's strongly encouraged to use the passing or failing of these unit tests as an indication for whether or not changes break previous expectations about code behavior. They do not comprehensively assess whether changes to the code are "good" or not, just whether the behavior of many individual components meets specific expectations. As such, it's expected that tests will have to be updated and augmented as the code gets new behavior and accommodates more use-cases.
+
+In addition to running the unit tests as a whole, you can choose to run the dummy-data validation exercise by itself:
+
+```
+python roams/tests/validation/deterministic_validation.py
+```
+
 ## Structure
 
 The code that executes the model is supposed to be separated into three distinct "layers": the input layer, the processing layer, and the output layer. 
