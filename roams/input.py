@@ -32,8 +32,7 @@ _REQUIRED_CONFIGS = {
     "source_file" : str,
     "source_id_name" : str,
     "asset_col" : str,
-    "prod_asset_type" : Iterable,
-    "midstream_asset_type" : Iterable,
+    "asset_groups" : dict,
     "coverage_count" : str,
         
     # Attributes of covered region (not derived here)
@@ -295,6 +294,36 @@ class ROAMSConfig:
                 "percentage values out of 100."
             )
         
+        # lower() the keys in the dictionary
+        # (and turn any non-string keys to string)
+        lower_asset_groups = {
+            (str(k).lower()) : v
+            for k,v in self.asset_groups.items()
+        }
+        self.asset_groups = lower_asset_groups
+
+        # Assert that production and midstream are both in the described aerial 
+        # assets
+        for group in ["production","midstream"]:
+            if group not in self.asset_groups.keys():
+                raise KeyError(
+                    f"The {self.asset_groups.keys() = } should contain an "
+                    f"entry for '{group}'. The ROAMSModel will need this to "
+                    "compute emissions distributions."
+                )
+            
+        production_assets = set(self.asset_groups["production"])
+        midstream_assets = set(self.asset_groups["midstream"])
+        if shared := production_assets.intersection(midstream_assets):
+            raise ValueError(
+                "There are several assets that you listed as being both "
+                f"midstream and production infrastructure: {shared}. You "
+                "should revisit your input file, and if necessary reclassify "
+                "sources in your data. If you want to characterize an "
+                "additional asset group, just avoid naming it 'midstream' or "
+                "'production'."
+            )
+        
         self._config = config.copy()
         
         # Do some after-the-fact assignment with specific behaviors   
@@ -339,8 +368,7 @@ class ROAMSConfig:
             cutoff_handling = "drop",
             coverage_count = self.coverage_count,
             asset_col = self.asset_col,
-            prod_asset_type = self.prod_asset_type,
-            midstream_asset_type = self.midstream_asset_type,
+            asset_groups = self.asset_groups,
             loglevel = self.loglevel,
         )
 

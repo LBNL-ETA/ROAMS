@@ -58,28 +58,28 @@ class AerialSurveyDataTests(TestCase):
             cutoff_col=None,
             cutoff_handling="drop",
             asset_col="asset_type",
-            prod_asset_type=("prod",),
-            midstream_asset_type=("midstream",),
+            asset_groups = {"production":["prod"],"midstream":["midstream"],"other":["other"]}
         )
 
         self.assertEqual(
-            survey.production_sources.shape[0],2
+            survey.source_groups["production"].shape[0],2
         )
         self.assertEqual(
-            survey.production_plumes.shape[0],2
-        )
-        np.testing.assert_equal(
-            survey.prod_source_ids,np.array([1,2])
+            survey.plume_groups["production"].shape[0],2
         )
 
         self.assertEqual(
-            survey.midstream_sources.shape[0],2
+            survey.source_groups["midstream"].shape[0],2
         )
         self.assertEqual(
-            survey.midstream_plumes.shape[0],2
+            survey.plume_groups["midstream"].shape[0],2
         )
-        np.testing.assert_equal(
-            survey.midstream_source_ids,np.array([3,4])
+        
+        self.assertEqual(
+            survey.source_groups["other"].shape[0],1
+        )
+        self.assertEqual(
+            survey.plume_groups["other"].shape[0],1
         )
 
     def test_cutoff_treatment(self):
@@ -102,14 +102,13 @@ class AerialSurveyDataTests(TestCase):
             cutoff_col="cutoff",
             cutoff_handling="drop",
             asset_col="asset_type",
-            prod_asset_type=("prod",),
-            midstream_asset_type=("midstream",),
+            asset_groups = {"production":["prod"],"midstream":["midstream"]}
         )
         self.assertEqual(
-            len(survey.midstream_plume_emissions),1
+            len(survey.plume_emissions["midstream"]),1
         )
         self.assertEqual(
-            len(survey.production_plume_emissions),2
+            len(survey.plume_emissions["production"]),2
         )
         self.assertEqual(
             # Index 2 should be source_id=3, which had a cut off plume
@@ -133,14 +132,13 @@ class AerialSurveyDataTests(TestCase):
             cutoff_col=None,
             cutoff_handling="drop",
             asset_col="asset_type",
-            prod_asset_type=("prod",),
-            midstream_asset_type=("midstream",),
+            asset_groups = {"production":["prod"],"midstream":["midstream"]}
         )
         self.assertEqual(
-            len(survey.midstream_plume_emissions),2
+            len(survey.plume_emissions["midstream"]),2
         )
         self.assertEqual(
-            len(survey.production_plume_emissions),2
+            len(survey.plume_emissions["production"]),2
         )
 
     def test_common_unit_no_change(self):
@@ -163,26 +161,25 @@ class AerialSurveyDataTests(TestCase):
             cutoff_col=None,
             cutoff_handling="drop",
             asset_col="asset_type",
-            prod_asset_type=("prod",),
-            midstream_asset_type=("midstream",),
+            asset_groups = {"production":["prod"],"midstream":["midstream"]}
         )
         np.testing.assert_equal(
-            survey.production_plume_emissions,np.array([35,48])
+            survey.plume_emissions["production"],np.array([35,48])
         )
         np.testing.assert_equal(
-            survey.midstream_plume_emissions,np.array([210,242])
+            survey.plume_emissions["midstream"],np.array([210,242])
         )
         np.testing.assert_equal(
-            survey.production_plume_wind_norm,np.array([5,6])
+            survey.plume_wind_norm["production"],np.array([5,6])
         )
         np.testing.assert_equal(
-            survey.midstream_plume_wind_norm,np.array([21,22])
+            survey.plume_wind_norm["midstream"],np.array([21,22])
         )
         np.testing.assert_equal(
-            survey.production_plume_windspeed,np.array([7,8])
+            survey.plume_windspeed["production"],np.array([7,8])
         )
         np.testing.assert_equal(
-            survey.midstream_plume_windspeed,np.array([10,11])
+            survey.plume_windspeed["midstream"],np.array([10,11])
         )
     
     def test_emissions_per_day(self):
@@ -205,26 +202,25 @@ class AerialSurveyDataTests(TestCase):
             cutoff_col=None,
             cutoff_handling="drop",
             asset_col="asset_type",
-            prod_asset_type=("prod",),
-            midstream_asset_type=("midstream",),
+            asset_groups = {"production":["prod"],"midstream":["midstream"]}
         )
         np.testing.assert_equal(
-            survey.production_plume_emissions,np.array([35,48])/24
+            survey.plume_emissions["production"],np.array([35,48])/24
         )
         np.testing.assert_equal(
-            survey.midstream_plume_emissions,np.array([210,242])/24
+            survey.plume_emissions["midstream"],np.array([210,242])/24
         )
         np.testing.assert_equal(
-            survey.production_plume_wind_norm,np.array([5,6])/24
+            survey.plume_wind_norm["production"],np.array([5,6])/24
         )
         np.testing.assert_equal(
-            survey.midstream_plume_wind_norm,np.array([21,22])/24
+            survey.plume_wind_norm["midstream"],np.array([21,22])/24
         )
         np.testing.assert_equal(
-            survey.production_plume_windspeed,np.array([7,8])
+            survey.plume_windspeed["production"],np.array([7,8])
         )
         np.testing.assert_equal(
-            survey.midstream_plume_windspeed,np.array([10,11])
+            survey.plume_windspeed["midstream"],np.array([10,11])
         )
     
     def test_tons_per_h(self):
@@ -247,29 +243,28 @@ class AerialSurveyDataTests(TestCase):
             cutoff_col=None,
             cutoff_handling="drop",
             asset_col="asset_type",
-            prod_asset_type=("prod",),
-            midstream_asset_type=("midstream",),
+            asset_groups = {"production":["prod"],"midstream":["midstream"]}
         )
         np.testing.assert_equal(
-            survey.production_plume_emissions,np.array([35,48]) * 1000
+            survey.plume_emissions["production"],np.array([35,48]) * 1000
         )
         np.testing.assert_equal(
-            survey.midstream_plume_emissions,np.array([210,242]) * 1000
+            survey.plume_emissions["midstream"],np.array([210,242]) * 1000
         )
         np.testing.assert_equal(
-            survey.production_plume_wind_norm,np.array([5,6]) * 1000
+            survey.plume_wind_norm["production"],np.array([5,6]) * 1000
         )
         np.testing.assert_equal(
-            survey.midstream_plume_wind_norm,np.array([21,22]) * 1000
+            survey.plume_wind_norm["midstream"],np.array([21,22]) * 1000
         )
         np.testing.assert_equal(
-            survey.production_plume_windspeed,np.array([7,8])
+            survey.plume_windspeed["production"],np.array([7,8])
         )
         np.testing.assert_equal(
-            survey.midstream_plume_windspeed,np.array([10,11])
+            survey.plume_windspeed["midstream"],np.array([10,11])
         )
     
-    def test_missing_col_errors(self):
+    def test_raise_KeyErrors(self):
         """
         Assert that each of source ID column, emission rate, wind-normalized 
         emissions rate, wind speed, and coverage count columns can produce 
@@ -290,8 +285,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
 
         with self.assertRaises(KeyError):
@@ -309,8 +303,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
        
         with self.assertRaises(KeyError):
@@ -328,8 +321,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
         
         with self.assertRaises(KeyError):
@@ -347,8 +339,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
         
         with self.assertRaises(KeyError):
@@ -366,8 +357,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
         
         with self.assertRaises(KeyError):
@@ -385,8 +375,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col="THIS COLUMN DOESNT EXIST",
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
         
         with self.assertRaises(KeyError):
@@ -404,13 +393,13 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="THIS COLUMN DOESNT EXIST",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
 
-    def test_consistent_input_errors(self):
+    def test_raises_ValueErrors(self):
         """
-        Assert that inconsistent inputs produce ValueErrors.
+        Assert that inconsistent inputs produce ValueErrors, and that 
+        overlapping midstream and production asset types will too.
         """
         with self.assertRaises(ValueError):
             # Emissions and wind-normalized are missing
@@ -428,8 +417,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
         
         with self.assertRaises(ValueError):
@@ -448,8 +436,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
         
         with self.assertRaises(ValueError):
@@ -468,8 +455,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
         
         with self.assertRaises(ValueError):
@@ -488,8 +474,7 @@ class AerialSurveyDataTests(TestCase):
                 cutoff_col=None,
                 cutoff_handling="drop",
                 asset_col="asset_type",
-                prod_asset_type=("prod",),
-                midstream_asset_type=("midstream",),
+                asset_groups = {"production":["prod"],"midstream":["midstream"]}
             )
 
 if __name__=="__main__":

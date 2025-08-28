@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from copy import deepcopy
 
 from unittest import TestCase
 
@@ -24,8 +25,7 @@ TEST_CONFIG = {
     "source_file" : SOURCE_FILE,
     "source_id_name" : "source_id",
     "asset_col" : "asset_type",
-    "prod_asset_type" : ("prod",),
-    "midstream_asset_type" : ("midstream",),
+    "asset_groups": {"production":["prod"],"midstream":["midstream"]},
     "coverage_count" : "coverage_count",
     "aerial_em_col" : None,
     "aerial_em_unit" : None,
@@ -110,15 +110,26 @@ class ROAMSInputTests(TestCase):
             "source_file",
             "source_id_name",
             "asset_col",
-            "prod_asset_type",
-            "midstream_asset_type",
-            "gas_composition",
+            "asset_groups",
             "coverage_count",
-            "total_covered_ngprod_mcfd",
-            "total_covered_oilprod_bbld",
+            "gas_composition",
             "num_wells_to_simulate",
             "well_visit_count",
             "wells_per_site",
+            "total_covered_ngprod_mcfd",
+            "total_covered_oilprod_bbld",
+            "state_ghgi_file",
+            "ghgi_co2eq_unit",
+            "enverus_state_production_file",
+            "enverus_natnl_production_file",
+            "enverus_prod_unit",
+            "ghgi_ch4emissions_ngprod_file",
+            "ghgi_ch4emissions_ngprod_uncertainty_file",
+            "ghgi_ch4emissions_petprod_file",
+            "ghgi_ch4emissions_unit",
+            "year",
+            "state",
+            "frac_aerial_midstream_emissions",
             "midstream_transition_point",
             ):
             newconfig = TEST_CONFIG.copy()
@@ -139,15 +150,26 @@ class ROAMSInputTests(TestCase):
             "source_file",
             "source_id_name",
             "asset_col",
-            "prod_asset_type",
-            "midstream_asset_type",
-            "gas_composition",
+            "asset_groups",
             "coverage_count",
-            "total_covered_ngprod_mcfd",
-            "total_covered_oilprod_bbld",
+            "gas_composition",
             "num_wells_to_simulate",
             "well_visit_count",
             "wells_per_site",
+            "total_covered_ngprod_mcfd",
+            "total_covered_oilprod_bbld",
+            "state_ghgi_file",
+            "ghgi_co2eq_unit",
+            "enverus_state_production_file",
+            "enverus_natnl_production_file",
+            "enverus_prod_unit",
+            "ghgi_ch4emissions_ngprod_file",
+            "ghgi_ch4emissions_ngprod_uncertainty_file",
+            "ghgi_ch4emissions_petprod_file",
+            "ghgi_ch4emissions_unit",
+            "year",
+            "state",
+            "frac_aerial_midstream_emissions",
             "midstream_transition_point",
             ):
             newconfig = TEST_CONFIG.copy()
@@ -185,6 +207,29 @@ class ROAMSInputTests(TestCase):
         
         # c1 is None -> should be ValueError
         newconfig["gas_composition"] = {"C1":None,"C2":.9}
+        with self.assertRaises(ValueError):
+            c = ROAMSConfig(newconfig)
+    
+    def test_bad_asset_types(self):
+        """
+        Assert that when the aerial asset types are incorrectly specified, 
+        the appropriate errors will be raised.
+        """
+        # Remove "midstream" from the asset groups
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["asset_groups"].pop("midstream")
+        with self.assertRaises(KeyError):
+            c = ROAMSConfig(newconfig)
+        
+        # Remove "midstream" from the asset groups
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["asset_groups"].pop("production")
+        with self.assertRaises(KeyError):
+            c = ROAMSConfig(newconfig)
+        
+        # There's an overlapping asset type
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["asset_groups"] = {"production":["prod"],"midstream":["midstream","prod"]}
         with self.assertRaises(ValueError):
             c = ROAMSConfig(newconfig)
     
