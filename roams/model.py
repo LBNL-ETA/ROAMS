@@ -9,7 +9,6 @@ from matplotlib import pyplot as plt
 
 from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS, COMMON_ENERGY_UNITS
 from roams.conf import RESULT_DIR
-from roams import __version__
 
 from roams.input import ROAMSConfig
 
@@ -78,7 +77,6 @@ class ROAMSModel:
         # Set the log using prescribed level
         self.log = logging.getLogger("roams.model.ROAMSModel")
         self.log.setLevel(self.loglevel)
-        self.log.info(f"Version: {__version__}")
         # A dictionary attribute into which output tables will be put before writing
         self.table_outputs = dict()
 
@@ -309,9 +307,9 @@ class ROAMSModel:
 
         Args:
             infra (str):
-                One of "production" or "midstream". This string will be used 
-                directly to look up attributes on `self.cfg.aerialSurvey`, in 
-                the form of f"{infra}_plumes", for example.
+                This string will be used directly to look up values under 
+                dictionary properties of an asset group in the input class
+                `self.cfg.aerialSurvey`.
 
         Returns:
             tuple:
@@ -324,12 +322,12 @@ class ROAMSModel:
                 will not be altered in any way from their original.
         """
         # Define sources and plumes tables for this infrastructure
-        infra_sources = getattr(self.cfg.aerialSurvey,f"{infra}_sources")
-        infra_plumes = getattr(self.cfg.aerialSurvey,f"{infra}_plumes")
+        infra_sources = self.cfg.aerialSurvey.source_groups[infra]
+        infra_plumes = self.cfg.aerialSurvey.plume_groups[infra]
 
         # Define emissions and wind-normalized emissions
-        infra_em = getattr(self.cfg.aerialSurvey,f"{infra}_plume_emissions")
-        infra_windnorm = getattr(self.cfg.aerialSurvey,f"{infra}_plume_wind_norm")
+        infra_em = self.cfg.aerialSurvey.plume_emissions[infra]
+        infra_windnorm = self.cfg.aerialSurvey.plume_wind_norm[infra]
         
         # max_count = maximum number of coverages
         max_count = infra_sources[self.cfg.aerialSurvey.coverage_count].max()
