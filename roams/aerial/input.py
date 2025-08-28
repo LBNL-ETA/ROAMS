@@ -127,20 +127,18 @@ class AerialSurveyData:
         asset_col (str, optional): 
             The name of the column in the sources table that holds the type 
             of asset that best describes the corresponding infrastructure. 
-            This is used with `prod_asset_type` and `midstream_asset_type` to 
-            segregate the aerial plume observations into different types 
-            of infrastructure for the ROAMS model.
+            This is used with `asset_groups` to segregate the aerial plume 
+            observations into different types of infrastructure for the ROAMS 
+            model.
             Defaults to None.
         
-        prod_asset_type (tuple, optional): 
-            A tuple of values in the `asset_col` of the source table that 
-            correspond to what should be counted as production infrastructure. 
-            Defaults to None.
-        
-        midstream_asset_type (tuple, optional): 
-            A tuple of values in the `asset_col` of the source table that 
-            correspond to what should be counted as midstream infrastructure.
-            Defaults to None.
+        asset_groups (dict, optional):
+            A dictionary of {str : list} pairs, where each key is the name of 
+            a group of asset types (e.g. "production"). Each list is a list of 
+            asset types (under `asset_col`) that should be associated to that 
+            label. There must be "production" and "midstream" keys, whose 
+            lists must not have shared values. Additional keys in the 
+            dictionary are not inspected at all.
 
         loglevel (int, optional):
             The level to which events in this submodule should be logged.
@@ -161,8 +159,7 @@ class AerialSurveyData:
         cutoff_handling : str = "drop",
         coverage_count : str = None,
         asset_col : str = None,
-        prod_asset_type : tuple = None,
-        midstream_asset_type : tuple = None,
+        asset_groups : dict[str,list] = None,
         loglevel : int = logging.INFO,
     ):
         self.log = logging.getLogger("roams.aerial.input.AerialSurveyData")
@@ -268,23 +265,24 @@ class AerialSurveyData:
         self.asset_col = asset_col
         self.source_id_col = source_id_col
             
-        if prod_asset_type is None:
+        if not isinstance(asset_groups,dict):
             raise ValueError(
-                f"{prod_asset_type = } is None, but to be able to separate "
-                "the plumes into production and midstream assets, this should "
-                f"be an iterable of values in `{asset_col}` that correspond "
-                "to production assets."
+                f"{asset_groups = } is not a dict, but to be able to separate"
+                "the plumes into different asset groups, this should a "
+                "dictionary whose keys are the names of groups of individual "
+                f"asset types under `{asset_col}`. The values in this "
+                "dictionary should be a list of such asset types. One group "
+                "has to be 'production', and one has to be 'midstream'."
             )
-        self.prod_asset_type = prod_asset_type
         
-        if midstream_asset_type is None:
-            raise ValueError(
-                f"{midstream_asset_type = } is None, but to be able to separate "
-                "the plumes into production and midstream assets, this should "
-                f"be an iterable of values in `{asset_col}` that correspond "
-                "to midstream assets."
-            )
-        self.midstream_asset_type = midstream_asset_type
+        # lower() the keys in the dictionary
+        # (and turn any non-string keys to string)
+        lower_asset_groups = {
+            (str(k).lower()) : v
+            for k,v in asset_groups.items()
+        }
+        asset_groups = lower_asset_groups
+        self.asset_groups = asset_groups
 
         self.handle_cutoffs(cutoff_handling)
         self.differentiate_sources()
@@ -397,194 +395,133 @@ class AerialSurveyData:
         tables have 0 rows - it's possible that data from a survey may 
         only observe plumes from one type of source or another.
         """
-        self.log.info(
-            f"Filtering production assets based on {self.asset_col} being "
-            f"one of: {', '.join(self.prod_asset_type)}."
-        )
-        # Production sources = 100% of the content of the raw source table, 
-        # but only the rows whose asset description column have values that 
-        # match those prescribed by self.prod_asset_type
-        self.production_sources = self._raw_source.loc[
-            self._raw_source[self.asset_col].isin(self.prod_asset_type)
-        ]
-        self.log.debug(
-            f"After filtering for specified production assets "
-            f"({', '.join(self.prod_asset_type)}), "
-            f"there are {len(self.production_sources)} records left in the "
-            "production sources table."
-        )
+        self.plume_groups = dict()
+        self.source_groups = dict()
         
-        # Production plumes = 100% of the content of the raw plumes table, 
-        # but only the rows whose sources have been identified as production 
-        # assets.
-        self.production_plumes = self._raw_plumes.loc[
-            self._raw_plumes[self.source_id_col].isin(self.production_sources[self.source_id_col])
-        ]
-        self.log.debug(
-            f"After filtering for specified production assets "
-            f"({', '.join(self.prod_asset_type)}), "
-            f"there are {len(self.production_plumes)} records left in the "
-            "production plumes table."
-        )
-
-        self.log.info(
-            f"Filtering midstream assets based on {self.asset_col} being "
-            f"one of: {', '.join(self.midstream_asset_type)}."
-        )
-        # Midstream sources = 100% of the content of the raw source table, 
-        # but only the rows whose asset description column have values that 
-        # match those prescribed by self.midstream_asset_type
-        self.midstream_sources = self._raw_source.loc[
-            self._raw_source[self.asset_col].isin(self.midstream_asset_type)
-        ]
-        self.log.debug(
-            f"After filtering for specified midstream assets "
-            f"({', '.join(self.midstream_asset_type)}), "
-            f"there are {len(self.midstream_sources)} records left in the "
-            "midstream sources table."
-        )
-        
-        # Midstream plumes = 100% of the content of the raw plumes table, 
-        # but only the rows whose sources have been identified as midstream 
-        # assets.
-        self.midstream_plumes = self._raw_plumes.loc[
-            self._raw_plumes[self.source_id_col].isin(self.midstream_sources[self.source_id_col])
-        ]
-        self.log.debug(
-            f"After filtering for specified midstream assets "
-            f"({', '.join(self.midstream_asset_type)}), "
-            f"there are {len(self.midstream_plumes)} records left in the "
-            "midstream plumes table."
-        )
-    
-    @property
-    def production_plume_emissions(self) -> np.ndarray:
-        # Always return emissions in COMMON_EMISSIONS_UNITS
-
-        # If the emissions column was given, then just return that value
-        # converted into the appropriate unit
-        if self._em_col is not None:
-            return convert_units(
-                self.production_plumes[self._em_col].values,
-                self._data_em_unit,
-                COMMON_EMISSIONS_UNITS
+        for group, assets in self.asset_groups.items():
+            self.log.info(
+                f"Filtering {group} assets based on {self.asset_col} being "
+                f"one of: {', '.join(assets)}."
             )
-        
-        # Otherwise compute using the remaining quantities
-        return (self.production_plume_wind_norm * self.production_plume_windspeed)
-    
-    @property
-    def midstream_plume_emissions(self) -> np.ndarray:
-        # Always return emissions in COMMON_EMISSIONS_UNITS
-
-        # If the emissions column was given, then just return that value
-        # converted into the appropriate unit
-        if self._em_col is not None:
-            return convert_units(
-                self.midstream_plumes[self._em_col].values,
-                self._data_em_unit,
-                COMMON_EMISSIONS_UNITS
-            )
-
-        # Otherwise compute using the remaining quantities
-        return self.midstream_plume_wind_norm * self.midstream_plume_windspeed
-    
-    @property
-    def production_plume_wind_norm(self) -> np.ndarray:
-        # Wind normalized emissions to always be returned in COMMON_WIND_NORM_EM_UNITS
-        
-        # If the wind-normalized emissions column is given, just return the converted
-        # value (accounting for conversion of numerator and denominator in 
-        # [emissions rate]/[windspeed]).
-        if self._wind_norm_col is not None:
-            # E.g. numer, denom = "kg/d", "mph"
-            numer, denom = self._data_wind_norm_unit.lower().split(":")
             
-            # E.g. target_numer, target_denom = "kgh", "mps"
-            target_numer, target_denom = COMMON_WIND_NORM_EM_UNITS.lower().split(":")
-
-            # Interim output in converted numerator units
-            # E.g. "kgh / mph"
-            output = convert_units(
-                self.production_plumes[self._wind_norm_col].values,
-                numer,
-                target_numer
+            # sources = 100% of the content of the raw source table, 
+            # but only the rows whose asset description column have values that 
+            # match those prescribed by `assets`
+            self.source_groups[group] = self._raw_source.loc[
+                self._raw_source[self.asset_col].isin(assets)
+            ]
+            self.log.debug(
+                f"After filtering for specified {group} assets "
+                f"({', '.join(assets)}), there are "
+                f"{len(self.source_groups[group])} records in the {group} "
+                "sources table."
             )
-
-            # Convert denominators (switch the order in the function call, 
-            # to reflect we are converting a denominator, not numerator - i.e. 
-            # flip the multiplication)
-            return convert_units(output,target_denom,denom)
-
-        # Otherwise compute using the remaining quantities
-        return self.production_plume_emissions/self.production_plume_windspeed
-    
-    @property
-    def midstream_plume_wind_norm(self) -> np.ndarray:
-        # Wind normalized emissions to always be returned in COMMON_WIND_NORM_EM_UNITS
         
-        # If the wind-normalized emissions column is given, just return the converted
-        # value (accounting for conversion of numerator and denominator in 
-        # [emissions rate]/[windspeed]).
-        if self._wind_norm_col is not None:
-            # E.g. numer, denom = "kg/d", "mph"
-            numer, denom = self._data_wind_norm_unit.lower().split(":")
-            
-            # E.g. target_numer, target_denom = "kgh", "mps"
-            target_numer, target_denom = COMMON_WIND_NORM_EM_UNITS.lower().split(":")
-
-            # Interim output in converted numerator units
-            # E.g. "kgh / mph"
-            output = convert_units(
-                self.midstream_plumes[self._wind_norm_col].values,
-                numer,
-                target_numer
+            # Plumes = 100% of the content of the raw plumes table, 
+            # but only the rows whose sources have been identified as assets
+            # for this group
+            self.plume_groups[group] = self._raw_plumes.loc[
+                (
+                    self._raw_plumes[self.source_id_col]
+                    .isin(self.source_groups[group][self.source_id_col])
+                )
+            ]
+            self.log.debug(
+                f"After filtering for specified {group} assets "
+                f"({', '.join(assets)}), there are "
+                f"{len(self.plume_groups[group])} records in the {group} plumes "
+                "table."
             )
-
-            # Convert denominators (switch the order in the function call, 
-            # to reflect we are converting a denominator, not numerator - i.e. 
-            # flip the multiplication)
-            return convert_units(output,target_denom,denom)
-
-        # Otherwise compute using the remaining quantities
-        return self.midstream_plume_emissions/self.midstream_plume_windspeed
     
     @property
-    def production_plume_windspeed(self) -> np.ndarray:
-        # Wind normalized emissions to always be returned in COMMON_WIND_SPEED_UNITS
-        
-        # If the wind speed col is given, just return the converted version of that column
-        if self._wind_speed_col is not None:
-            return convert_units(
-                self.production_plumes[self._wind_speed_col].values,
-                self._data_wind_speed_unit,
-                COMMON_WIND_SPEED_UNITS
-            )
+    def plume_emissions(self) -> dict[str,np.ndarray]:
+        # Store a dict of {asset group : plume emissions} pairs
+        if not hasattr(self,"_plume_emissions"):
+            self._plume_emissions = dict()
 
-        # Otherwise compute using the remaining quantities
-        return self.production_plume_emissions/self.production_plume_wind_norm
+            for group in self.asset_groups.keys():
+
+                # Store the converted emissions rates if already in the data
+                if self._em_col is not None:
+                    self._plume_emissions[group] = convert_units(
+                        self.plume_groups[group][self._em_col].values,
+                        self._data_em_unit,
+                        COMMON_EMISSIONS_UNITS
+                    )
+
+                # Otherwise store the product of wind-normalized emissions 
+                # and windspeed.
+                else:
+                    self._plume_emissions[group] = (
+                        self.plume_wind_norm[group]
+                        * self.plume_windspeed[group]
+                    )
+
+        return self._plume_emissions
     
     @property
-    def midstream_plume_windspeed(self) -> np.ndarray:
-        # Wind normalized emissions to always be returned in COMMON_WIND_SPEED_UNITS
+    def plume_wind_norm(self) -> dict[str,np.ndarray]:
+        # Store a dictionary of {group : wind-normalized emissions} pairs
+        if not hasattr(self,"_plume_wind_norm"):
+            self._plume_wind_norm = dict()
 
-        # If the wind speed col is given, just return the converted version of that column
-        if self._wind_speed_col is not None:
-            return convert_units(
-                self.midstream_plumes[self._wind_speed_col].values,
-                self._data_wind_speed_unit,
-                COMMON_WIND_SPEED_UNITS
-            )
+            for group in self.asset_groups.keys():
 
-        # Otherwise compute using the remaining quantities
-        return self.midstream_plume_emissions/self.midstream_plume_wind_norm
+                # Store the converted wind-normalized emissions rates if 
+                # already in the data
+                if self._wind_norm_col is not None:
+                    # E.g. numer, denom = "kg/d", "mph"
+                    numer, denom = self._data_wind_norm_unit.lower().split(":")
+                    
+                    # E.g. target_numer, target_denom = "kg/h", "m/s"
+                    target_numer, target_denom = COMMON_WIND_NORM_EM_UNITS.lower().split(":")
+
+                    # Interim output in converted numerator units
+                    # E.g. "kgh / mph"
+                    interim = convert_units(
+                        self.plume_groups[group][self._wind_norm_col].values,
+                        numer,
+                        target_numer
+                    )
+                    
+                    # Lastly convert denominator units
+                    self._plume_wind_norm[group] = convert_units(
+                        interim,
+                        target_denom,
+                        denom
+                    )
+
+                # Otherwise store the product of wind-normalized emissions 
+                # and windspeed.
+                else:
+                    self._plume_wind_norm[group] = (
+                        self.plume_emissions[group]
+                        /self.plume_windspeed[group]
+                    )
+
+        return self._plume_wind_norm
     
     @property
-    def prod_source_ids(self) -> np.ndarray:
-        # The identifiers of production sources in the aerial data
-        return self.production_sources[self.source_id_col].values
-    
-    @property
-    def midstream_source_ids(self) -> np.ndarray:
-        # The identifiers of midstream sources in the aerial data
-        return self.midstream_sources[self.source_id_col].values
+    def plume_windspeed(self) -> dict[str,np.ndarray]:
+        # Store a dict of {asset group : plume emissions} pairs
+        if not hasattr(self,"_plume_windspeed"):
+            self._plume_windspeed = dict()
+
+            for group in self.asset_groups.keys():
+
+                # Store the converted windspeed if already in the data
+                if self._wind_speed_col is not None:
+                    self._plume_windspeed[group] = convert_units(
+                        self.plume_groups[group][self._wind_speed_col].values,
+                        self._data_wind_speed_unit,
+                        COMMON_WIND_SPEED_UNITS
+                    )
+
+                # Otherwise store [emissions]/[wind-norm emissions]
+                else:
+                    self._plume_windspeed[group] = (
+                        self.plume_emissions[group]
+                        /self.plume_wind_norm[group]
+                    )
+
+        return self._plume_windspeed
