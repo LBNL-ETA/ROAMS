@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 
 from roams.constants import COMMON_EMISSIONS_UNITS, COMMON_PRODUCTION_UNITS, COMMON_ENERGY_UNITS
 from roams.conf import RESULT_DIR
+from roams import __version__
 
 from roams.input import ROAMSConfig
 
@@ -77,6 +78,7 @@ class ROAMSModel:
         # Set the log using prescribed level
         self.log = logging.getLogger("roams.model.ROAMSModel")
         self.log.setLevel(self.loglevel)
+        self.log.info(f"Version: {__version__}")
         # A dictionary attribute into which output tables will be put before writing
         self.table_outputs = dict()
 
