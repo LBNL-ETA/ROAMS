@@ -132,3 +132,15 @@ Lastly, we define the transition point as the least emissions value where the sm
 
 ## Primary Outputs
 [go back to top](#roams-methodology)
+
+There are few concrete outputs of the ROAMS methodology, as different researchers/users may be interested in very different properties of all the resulting quantities.
+
+But there are some outputs that are easy to derive and largely useful no matter what:
+
+* Total estimated basin CH4 emissions = `[Total CH4 emissions of combined production distribution] + [Total midstream aerial CH4 emissions ≥ midstream transition point] + [Total estimated sub-MDL midstream CH4 emissions]`
+* The fraction of basin CH4 emissions from each measurement source = `[Total CH4 emissions from estimate source] / [Total estimated basin CH4 emissions]`
+* The fractional volumetric loss of CH4 in the basin = `[Total estimated basin CH4 emissions] / [Total produced CH4 in the basin]`
+* The fractional energy loss of CH4 in the basin = `[Total embodied energy of basin CH4 emissions] / [Total embodied energy of all CH4 and oil produced in basin]`
+    * This can be a useful alternative to volumetric loss, where for basins that almost entirely oil, the denominator of volumetric loss would be close to 0 - they report almost no NG produced.
+* Average emissions size distributions and cumulative emissions distributions
+    * When averaged over a collection of N sorted iterations, can provide a smooth estimate of the emissions distribution from individual sources, or a combined estimate.
