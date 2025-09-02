@@ -2,9 +2,11 @@
 
 This repository holds python code intended to implement the logic behind the **R**egional **O**il and gas **A**erial **M**ethane **S**ynthesis (ROAMS) model. 
 
-It is intended to serve both as a source of documented methodology, and an implementation of it.
-
 This method was established by Evan Sherwin et al in [this paper](https://doi.org/10.1038/s41586-024-07117-5) for the aerial surveys described there.
+
+The goal of this model is to holistically estimate a CH4 emissions size distribution of gas & oil infrastructure in a specific region. It is especially valuable because it can combine distributions that separately cover small- and large-size CH4 emissions events.
+
+To read more about the model or underlying methodology, read the [methodology docs](docs/methodology.md). To learn more about the details of the implementation, you can look at the [implementation docs](docs/implementation.md).
 
 ## Installation
 
