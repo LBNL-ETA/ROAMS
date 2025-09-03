@@ -37,17 +37,17 @@ After parsing through the input file in this manner, it will use the specificati
 
 ```mermaid
 graph TD;
-    Z[ROAMSModel]                   --> A[ROAMSConfig]: creates;
-    A[ROAMSConfig]                  --> B[AerialSurveyData]: creates;
-    A[ROAMSConfig]                  --> C[SimulatedProductionAssetData]: creates;
-    A[ROAMSConfig]                  --> D[CoveredProductionDistData]: creates;
-    A[ROAMSConfig]                  --> E[GHGIDataInput]: creates;
-    A[ROAMSConfig]                  --> J(Gas Composition): makes sense of;
-    A[ROAMSConfig]                  --> K(Covered Production): makes sense of;
-    B[AerialSurveyData]             --> F(Aerial Data): makes sense of;
-    C[SimulatedProductionAssetData] --> G(Simulated Production Data): makes sense of;
-    D[CoveredProductionDistData]    --> H(Covered Production Data): makes sense of;
-    E[GHGIDataInput]                --> I(GHGI & Production Data): makes sense of;
+    Z[ROAMSModel]                   --> |creates| A[ROAMSConfig]
+    A[ROAMSConfig]                  --> |creates| B[AerialSurveyData]
+    A[ROAMSConfig]                  --> |creates| C[SimulatedProductionAssetData]
+    A[ROAMSConfig]                  --> |creates| D[CoveredProductionDistData]
+    A[ROAMSConfig]                  --> |creates| E[GHGIDataInput]
+    A[ROAMSConfig]                  --> |parses| J([Gas Composition])
+    A[ROAMSConfig]                  --> |parses| K([Covered Production])
+    B[AerialSurveyData]             --> |parses| F([Aerial Data])
+    C[SimulatedProductionAssetData] --> |parses| G([Simulated Production Data])
+    D[CoveredProductionDistData]    --> |parses| H([Covered Production Data])
+    E[GHGIDataInput]                --> |parses| I([GHGI & Production Data])
 ```
 
 ### Aerial Data Input Class 
