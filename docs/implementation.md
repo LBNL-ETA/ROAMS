@@ -115,9 +115,9 @@ The "processing layer" is embodied in most of the guts of the `ROAMSModel` class
 
 ```mermaid
 graph LR;
-    A[perform_analysis()] --> |calls| B[make_samples()]
-    A[perform_analysis()] --> |calls| C[combine_prod_samples()]
-    A[perform_analysis()] --> |calls| D[compute_simulated_midstream_emissions()]
+    A[perform_analysis] --> |calls| B[make_samples]
+    A[perform_analysis] --> |calls| C[combine_prod_samples]
+    A[perform_analysis] --> |calls| D[compute_simulated_midstream_emissions]
 ```
 
 ### make_samples
