@@ -57,31 +57,40 @@ In addition to running the unit tests as a whole, you can choose to run the dumm
 python roams/tests/validation/deterministic_validation.py
 ```
 
-## Structure
+## Contributing
 
-The code that executes the model is supposed to be separated into three distinct "layers": the input layer, the processing layer, and the output layer. 
+The ROAMS Model is intended to change over time in order to fix bugs, update assumptions, and add new features. In whichever case, please follow these steps:
 
-The input layer concerns itself with units, column names, and table structures. By caring about these things, it allows the processing layer to only care about the algorithm.
+1. Make an issue on the repository
+    * The issue can be a venue for discussion of implementation, opinions to add or remove, and identification of any concerns.
+    * Detail what you would like to do, and why it's important. Who is affected by this bug or feature? If a bug, how do you reproduce it? If a feature, how would you use it? Be thoughtful and communicate your thoughts. This helps a lot to document decision making about the model.
+2. Develop on a new branch
+    * In general its a good idea to use the issue discussion as a guide, where appropriate, to inform development closely. 
+    * It's suggested that you name your branch using the issue number and basic description (e.g. `10_fix_aerial_input_bug`) (It's OK to address closely related issues on the same branch, too)
+    * For ease of merging, make sure you branch from the latest version of main unless you have a good reason to do otherwise
+3. Prepare for Pull Request
+    * Increment the version number in `roams.__init__`, which serves as the code version and should be 1-to-1 with version tags. Use basic [semantic versioning](https://semver.org/) practice to choose to increment major, minor, and patch versions.
+    * If you haven't added or altered any existing unit tests, consider whether or not you should. E.g. is your new feature being tested? Did you remove something that results in a tautological test?
+    * Make sure all the unit tests pass
+    * **Update any and all documentation affected by your changes**. Docstrings should obviously be updated, but perhaps also the README and/or docs.
+4. Create a Pull Request
+    * Describe what issue this branch is addressing and basically how.
+    * Choose a reviewer with time to review, and enough expertise to know what your changes are about
+    * You can bring up any unexpected small problems that arose or choices you had to make, and ask for input about whether something else should be done
+5. (Reviewer) Review Pull Request
+    * In a new environment, make sure all the tests pass
+    * Review the changes and make sure you can confirm the issue has been addressed.
+    * Review the changes and think about existing users: is there any new requirement this places on them? If they were to update their code and use the same input file, would it work?
+    * Review the changes and think about existing use cases: does this introduce any serious impediment to known code workflows?
+    * Are there any additional tests that should probably be added? Are there any that should be removed or altered?
+    * Are there warnings that can be avoided?
+    * **Make sure the documentation has been updated as appropriate**. Check the README and docs content. Even small updates are worth making if it keeps the documentation up-to-date.
+    * It's OK to decline a pull request if it's no longer really needed, if a much better approach was found, or if it doesn't really meet the issue. The approach can be reworked in the issue discussion, the branch can be redeveloped, and 
+6. Merge branch
+    * If everything is OK, the reviewer approves the PR and merges the branch
+    * [Tag](https://git-scm.com/book/en/v2/Git-Basics-Tagging) the merge commit on the main branch, with a message to simply describe the change. The version tag should correspond to the new `__version__` in `roams/__init__.py`.
+    * Communicate to stakeholders that changes have been made (e.g. the bug has been fixed, the desired feature now exists...).
 
-The processing layer implements the true logic of the ROAMS model, and is primarily concerned only with the algorithmic logic.
-
-The output layer is supposed to make human-readable results that are important to users.
-
-### Input Layer
-
-The input "layer" is responsible for not only reading the input file and applying default behavior, but instantiating specialized classes that wrap around the data in given input files. These classes hold accessible properties intended to serve as a source of truth for important information contained in the data.
-
-For example, the `roams.aerial.input.AerialSurveyData` class has a `production_plume_emissions` property that returns the emissions values from all production-associated plumes in fixed units.
-
-The input layer is embodied by `roams.input.ROAMSConfig`, which is used to read the input file. This class is instantiated with an input file (or the content of the dictionary embodied therein), and uses classes defined in the `input` submodules to wrap around the given input data.
-
-### Processing Layer
-
-The processing "layer" is embodied in the `perform_analysis` method of the `roams.model.ROAMSModel` class. In this layer the simulated and aerial production distributions are created the put together for each monte-carlo iteration. The midstream aerial emissions are sampled and combined with derived GHGI-based estimates.
-
-### Output Layer (in development)
-
-The output "layer" is supposed to be responsible for making human-readable summaries, plots, or more highly derived information based on what was computed. This is currently embodied by the `generate_and_write_results` method of the `roams.model.ROAMSModel` class.
 
 ## Input file format
 
