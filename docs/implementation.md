@@ -53,7 +53,7 @@ graph TD;
 ### Aerial Data Input Class 
 The input class for parsing aerial survey input data is `roams.aerial.input.AerialSurveyData`. 
 
-It's expected that the aerial data is provided in two parts: plume data and source data. While plume data holds the information about plume size (and what sources they're coming from), the source data classifies the source types and number of fly-overs. The column names, and units thereof where necessary, are always expected to be provided.
+It's expected that the aerial data is provided in two parts as csvs: plume data and source data. While plume data holds the information about plume size (and what sources they're coming from), the source data classifies the source types and number of fly-overs. The column names, and units thereof where necessary, are always expected to be provided.
 
 When first instantiated, the `AerialSurveyData` class will assert that the prescribed columns exist, and that there's sufficient information to collect or infer emissions and wind-normalized emissions (via the relation `emissions [mass/time] = wind-normalized emissions [mass/time / speed] * windspeed [speed]`, if necessary). It will also segregate the dataset into different `asset_group`s, which are subsets of the source and plume data corresponding to specific prescribed source asset types. The subsets of the input data corresponding to each asset group are used in providing data to the ROAMSModel class. While the `AerialSurveyData` class doesn't have an opinion about what asset groups are specified, the `ROAMSConfig` will require that "production" and "midstream" are given - the `ROAMSModel` will require those.
 
@@ -68,7 +68,7 @@ For more detail on unit handling, see the [unit handling section](#unit-handling
 ### Simulated Data Input Class 
 The input class for parsing simulated production emissions data is `roams.simulated.input.SimulatedProductionAssetData`.
 
-This class will expect the data to be provided with a table that at least has a column holding simulated emissions values. A user also has to specify the units of these physical emissions values. If stratified re-sampling is intended to be done, this data should also have a simulated production column (and corresponding specified unit).
+This class will expect the data to be provided with a csv table that at least has a column holding simulated emissions values. A user also has to specify the units of these physical emissions values. If stratified re-sampling is intended to be done, this data should also have a simulated production column (and corresponding specified unit).
 
 The class provides several properties as entrypoints to the `ROAMSModel` class:
 
@@ -98,8 +98,8 @@ This class takes a lot of distinct tables as inputs. It requires state & nationa
 This particular input class has very specific opinions about how the data are formatted. You should look at the dummy data to ensure that your inputs are in the same form if you're experiencing problems.
 
 The class provides two main properties to serve as entrypoints for the `ROAMSModel` to access the underlying data:
-* `total_midstream_ch4_loss_rate` : The total rate of CH4 loss, expressed as a dimensionless and unitless ratio of `[CH4 emitted from midstream infrastructure]/[Total CH4 produced]`. It is the lesser of a state-level and national-level estimate.
-* `submdl_midstream_ch4_loss_rate` : A fraction of `total_midstream_ch4_loss_rate`, representing only the portion that is presumably not aerially observable.
+* `total_midstream_ch4_loss_rate` : The total rate of CH4 loss, expressed as a dimensionless and unitless ratio of `[CH4 emitted from midstream infrastructure]/[Total CH4 produced]`. It is the lesser of a state-level and national-level estimate. It will be a `pd.Series` with indices of `'low', 'mid', 'high'`. While the `'mid'` value is the computed estimate, the `'low'` and `'high'` values are estimated 95% confidence interval bounds inferred by reading and using very specific data from an input table.
+* `submdl_midstream_ch4_loss_rate` : A fraction of `total_midstream_ch4_loss_rate`, representing only the portion that is presumably not aerially observable. It will be a `pd.Series` with indices of `'low', 'mid', 'high'`. While the `'mid'` value is the computed estimate, the `'low'` and `'high'` values are estimated 95% confidence interval bounds inferred by reading and using very specific data from an input table.
 
 For more detail on unit handling, see the [unit handling section](#unit-handling).
 
@@ -111,17 +111,69 @@ The logic of converting units within the input layer is handled by `roams.utils.
 ## Processing Layer
 [back to top](#implementation)
 
+The "processing layer" is embodied in most of the guts of the `ROAMSModel` class, and contains an implementation of the [ROAMS Methodology](#/docs/methodology.md). This logic is executed in three steps: [making samples](#make_samples), [combining simulated & aerial production distributions](#combined_prod_samples), and [computing an estimate of sub-detection-level midstream emissions](#compute_simulated_midstream_emissions), which are executed in this order within `perform_analysis()`.
+
 ```mermaid
 graph LR;
-    A[perform_analysis] --> B[make_samples]
-    A[perform_analysis] --> C[combine_prod_samples]
-    A[perform_analysis] --> D[compute_simulated_midstream_emissions]
+    A[perform_analysis()] --> |calls| B[make_samples()]
+    A[perform_analysis()] --> |calls| C[combine_prod_samples()]
+    A[perform_analysis()] --> |calls| D[compute_simulated_midstream_emissions()]
 ```
+
+### make_samples
+
+The goal of this method is to establish samples of the simulated production emissions, aerially measured production emissions, and aerially measured midstream emissions. By the end of this method, the following attributes should be defined:
+
+* `simulated_sample`: A `np.ndarray`  whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with (column-wise) sorted ascending values of simulated emissions values in `COMMON_EMISSIONS_UNITS`, which may or may not have been re-sampled with stratification.
+* `prod_tot_aerial_sample`: A `np.ndarray` whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with mostly 0s, in all likelihood, with (column-wise) sorted ascending aerially measured, sampled, and adjusted emissions values in `COMMON_EMISSIONS_UNITS`.
+* `prod_partial_detection_emissions`: A `np.ndarray` whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Each value in this table is the partial detection correction for corresponding values in `prod_tot_aerial_sample` (e.g. the value in the 10th row and 9th column is the partial detection correction for the emissions value at the 10th row and 9th column of `prod_tot_aerial_sample`).
+* `midstream_tot_aerial_sample`: A `np.ndarray` whose shape is [number of measured midstream sources] x [number of monte-carlo iterations]. Should represent a sample of adjusted and perhaps noised emissions from midstream infrastructure, without any padding zeros to represent infrastructure surveyed but not emitting.
+* `midstream_partial_detection_emissions`: A `np.ndarray` whose shape is [number of measured midstream sources] x [number of monte-carlo iterations]. Each value in this table is the partial detection correction for corresponding values in `midstream_tot_aerial_sample` (e.g. the value in the 10th row and 9th column is the partial detection correction for the emissions value at the 10th row and 9th column of `midstream_tot_aerial_sample`).
+
+### combined_prod_samples
+
+The goal of this method is to combine the distinct distributions of production emissions based on a sampling of aerial measurement, and simulated results. It will find the transition point for each monte-carlo iteration, if one is not prescribed in the input file, and then combine distributions in each iteration.
+
+In order to combine the simulated and aerially sampled emissions distributions in each monte-carlo iteration, it functionally follows these steps:
+
+1. Instantiate the combined distribution as a copy of the aerial emissions sample of these `W` wells (this will include many 0s).
+2. Identify all the simulated emissions less than the transition point in this iteration (this will be a number of values `w`<`W`, in all likelihood)
+3. Find the first index in the combined distribution where emissions are at least equal to the transition point
+4. Replace all the values up before this index with a sample (w/ replacement) from the `w` simulated emissions values below the transition point.
+    * The code will raise an error if `w` is less than the number of slots to fill.
+5. Re-sort the resulting list of emissions values ascending, including the corresponding partial detection values.
+
+The result of this method is the definition of two new attributes:
+
+* `combined_samples`: A `np.ndarray` whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with (column-wise) sorted ascending values of emissions in `COMMON_EMISSIONS_UNITS`, representing the estimated emissions of some well in the study region.
+* `prod_partial_detection_emissions`: A `np.ndarray`  whose shape is [number of wells to simulate] x [number of monte-carlo iterations].  Each value in this table is the partial detection correction for corresponding values in `combined_samples` (e.g. the value in the 10th row and 9th column is the partial detection correction for the emissions value at the 10th row and 9th column of `combined_samples`).
+
+### compute_simulated_midstream_emissions
+
+The goal of this method is to compute the estimated sub-detection-level midstream emissions, as well as total midstream emissions estimated per available GHGI and production data.
+
+In each case, the relevant emissions quantity is computed as `[CH4 loss rate] * [CH4 production in the study region]`. 
+
+* `submdl_ch4_midstream_emissions`: A `pd.Series` representing an estimate of sub-detection-level midstream emissions and lower- and upper- 95% confidence interval bounds. This is in `COMMON_EMISSIONS_UNITS`.
+* `total_ch4_midstream_emissions`: A `pd.Series` representing an estimate of total midstream emissions and lower- and upper- 95% confidence interval bounds. This is in `COMMON_EMISSIONS_UNITS`.
 
 ## Output Layer
 [back to top](#implementation)
 
+The "output layer" is supposed to be an abstraction of the task of generating human-readable (and/or machine usable) results based on what was computed in the processing layer. Currently, this is barely abstracted at all, and is entirely embodied in the last part of `perform_analysis()` of the `ROAMSModel` class, via the [generate_and_write_outputs](#generate_and_write_outputs) method.
+
 ```mermaid
 graph LR;
-    A[perform_analysis] --> B[generate_and_write_outputs]
+    A[perform_analysis] --> |calls| B[generate_and_write_outputs]
 ```
+
+### generate_and_write_outputs
+
+This method is responsible for generating outputs based on what was computed in the processing layer. It will:
+
+1. Make an output folder if it doesn't exist (this will be `"run_results/<foldername from input file>"`). All the outputs will be saved here.
+2. Save a copy of the parsed input file, with applied defaults and everything.
+    * Note that if the input was passed as a python dictionary with custom defined functions, only the names will be saved. Other users without the function definition won't be able to re-use the input file.
+3. Create tabular outputs by calling `make_tablar_outputs()`, which just calls a sequence of other methods. Each method is responsible for putting a `pd.DataFrame` into the `self.table_outputs` dictionary. The key under which the DataFrame is saved will be the filename.
+4. Go through each of the `name : pd.DataFrame` item pairs in `self.table_outputs` and save the DataFrame without it's index as a csv file with that name.
+5. Call `gen_plots()` to create and save desired plots to the output folder.
