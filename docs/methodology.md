@@ -1,6 +1,7 @@
 # ROAMS Methodology
+[Back to README](/README.md)
 
-This part of the documentation describes the implemented methodology in a mostly code-agnostic way. 
+This part of the documentation describes the implemented methodology in a mostly code-agnostic way. The implementation of this methodology, and other decisions made around it, are described in the [implementation documentation](/docs/implementation.md)
 
 ## Table of Contents
 
