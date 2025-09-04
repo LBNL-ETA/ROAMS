@@ -34,7 +34,7 @@ It's also possible to pass a dictionary as input to the `ROAMSModel`. This can b
 ```python3
 from roams.model import ROAMSModel
 
-# You could ynamically compute input quantities
+# You could dynamically compute input quantities
 production_value = compute_production_value()
 
 # You can define custom functions that aren't contained in the codebase
@@ -104,7 +104,7 @@ Data formats and standards are expected to change over time as the ROAMS codebas
 
 ### Input File Additions
 
-You can trivially add information to the **input file** without altering the code. Unrecognized input {key : value} pairs will be saved as attributes like every other pair, but will result in a warning. For example:
+You can trivially add information to the input file without altering the code. Unrecognized {key : value} pairs in the input file will be saved as attributes like every other pair, but will result in a warning. For example:
 
 ```python3
 from roams.model import ROAMSModel
