@@ -192,3 +192,15 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Tabular inputs and Outputs of the code
+*.csv
+*.xlsx
+*.json
+
+# Plots made in outputs
+*.png
+*.svg
+
+# OSX generated trash
+*.DS_Store
