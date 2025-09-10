@@ -123,7 +123,7 @@ For more detail on unit handling, see the [unit handling section](#unit-handling
 ### Gas Composition
 [go back to input layer](#input-layer-and-behavior)
 
-The gas composition is passed as a dictionary with keys taken from the list: `"c1", "c2", "c3", "nc4", "ic4", "nc5", "ic5", "c6+, "h2s", "h2"`, to be parsed directly by `ROAMSConfig`. The keys are representative of the molecular composition of natural gas analyzed in the region (C1 = methane, C2 = ethane, C3 = propane,..., nc4 = N-butane, ...). The values under each key should be a number at least 0 and at most 1. They should add up to a number at least 0.8, and below 1, the idea being that. This will primarily be used to convert amounts of natural gas into amounts of methane, but will also be used to define the energy content of natural gas, per logic in `roams.utils`.
+The gas composition is passed as a dictionary with keys taken from the list: `"c1", "c2", "c3", "nc4", "ic4", "nc5", "ic5", "c6+, "h2s", "h2"`, to be parsed directly by `ROAMSConfig`. The keys are representative of the molecular composition of natural gas analyzed in the region (C1 = methane, C2 = ethane, C3 = propane,..., nc4 = N-butane, ...). The values under each key should be a number at least 0 and at most 1. They should add up to a number at least 0.8, and below 1, the idea being that not all of the content gas may be important to account for, and may not even be knowable. This composition will primarily be used to convert amounts of natural gas into amounts of methane, but will also be used to define the energy content of natural gas, per logic in `roams.utils`.
 
 ### Covered Production
 [go back to input layer](#input-layer-and-behavior)

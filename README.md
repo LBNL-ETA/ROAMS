@@ -8,7 +8,16 @@ The goal of this model is to holistically estimate a CH4 emissions size distribu
 
 To read more about the model or underlying methodology, read the [methodology docs](/docs/methodology.md). To learn more about the details of the implementation, you can look at the [implementation docs](/docs/implementation.md). If you're having trouble using the code for your own work, you can read through example [use cases](docs/use%20cases.md).
 
+## Table of Contents
+
+* [Installation](#installation)
+* [Usage](#usage)
+* [Tests and Validation](#tests-and-validation)
+* [Contributing](#contributing)
+* [Input File Format](#input-file-format)
+
 ## Installation
+[go to top](#roams)
 
 I suggest you install this package from a local clone of this repository. 
 
@@ -20,6 +29,7 @@ I suggest you install this package from a local clone of this repository.
 6. (Optional) you can verify the validity of your installation by running `python -m unittest`, which will run prescribed tests in the repository.
 
 ## Usage
+[go to top](#roams)
 
 The intended use-case of the code here is in scripts that instantiate a `roams.model.ROAMSModel` class, and then call it's `perform_analysis()` method.
 
@@ -40,6 +50,7 @@ After calling `perform_analysis()`, the model that's ran will produce a folder i
 To get started with creating your own input file, read the [input file structure section](#input-file-format)
 
 ## Tests and Validation
+[go to top](#roams)
 
 A collection of unit tests exist to help verify that individual and collected components of the codebase are acting as intended. You can run the unit tests from the root of the repository with:
 
@@ -58,6 +69,7 @@ python roams/tests/validation/deterministic_validation.py
 ```
 
 ## Contributing
+[go to top](#roams)
 
 The ROAMS Model is intended to change over time in order to fix bugs, update assumptions, and add new features. In whichever case, please follow these steps:
 
@@ -93,6 +105,7 @@ The ROAMS Model is intended to change over time in order to fix bugs, update ass
 
 
 ## Input file format
+[go to top](#roams)
 
 The code is capable of of reading a JSON input file, which holds a simple flat dictionary structure. Here's a table that describes the keys of this flat dictionary input structure. Note that when reading JSON files, `null` will become `None` in python, and the booleans `true/false` become `True/False`.
 
