@@ -84,6 +84,7 @@ The ROAMS Model is intended to change over time in order to fix bugs, update ass
     * Increment the version number in `roams.__init__`, which serves as the code version and should be 1-to-1 with version tags. Use basic [semantic versioning](https://semver.org/) practice to choose to increment major, minor, and patch versions.
     * If you haven't added or altered any existing unit tests, consider whether or not you should. E.g. is your new feature being tested? Did you remove something that results in a tautological test?
     * Make sure all the unit tests pass
+    * Update the [changelog](/docs/changelog.md) to describe what has been changed, added, and/or fixed. Make sure newer versions are at the top of the document, and is included in the version list as well.
     * **Update any and all documentation affected by your changes**. Docstrings should obviously be updated, but perhaps also the README and/or docs.
 4. Create a Pull Request
     * Describe what issue this branch is addressing and basically how.
