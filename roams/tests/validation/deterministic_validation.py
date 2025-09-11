@@ -301,8 +301,6 @@ class ROAMSValidationTests(TestCase):
                 os.remove(os.path.join(f, file))
             os.rmdir(f)
 
-
-
 if __name__=="__main__":
-    import unittest
-    unittest.main()
+    model = DeterministicROAMSModel(INPUT)
+    model.perform_analysis()
