@@ -6,7 +6,7 @@ This part of the docs is intended to describe different ways to use the codebase
 Currently, the only known use case is to run a ROAMS model for the purpose of replication or validation. But there are several imagined use cases too, which may help researchers adopt the code to their own purposes.
 
 * [Running a ROAMS Model with an input file](#running-the-roams-model-with-an-input-file) (the known use case)
-* [Running a ROAMS Model](#running-the-roams-model) (the known use case)
+* [Running a ROAMS Model with a dictionary](#running-the-roams-model-with-a-dictionary) (the known use case)
 * [Using a custom ROAMS Model](#using-a-custom-roams-model)
 * [Adding or altering input behavior](#adding-inputs-changing-behavior)
 * [Making new or altered outputs](#making-new-or-altered-outputs)

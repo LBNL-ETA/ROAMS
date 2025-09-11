@@ -8,10 +8,10 @@
 This is the first version of the ROAMS model, with a limited set of outputs and the limited goal of characterizing emissions from midstream and production infrastructure alone.
 
 ### New Features
-    N/A
+N/A
 
 ### Changes
-    N/A
+N/A
     
 ### Fixes
-    N/A
+N/A
