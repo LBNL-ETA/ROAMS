@@ -9,6 +9,7 @@ The code in this codebase is an attempt to implement the [methodology](/docs/met
 * [Input Layer](#input-layer-and-behavior)
 * [Processing Layer](#processing-layer)
 * [Output Layer](#output-layer)
+* [Tests & Validation](#tests-and-validation)
 * [Computational Resources](#computational-resources)
 
 ## Summary
@@ -218,7 +219,31 @@ This method is responsible for generating outputs based on what was computed in 
 4. Go through each of the `name : pd.DataFrame` item pairs in `self.table_outputs` and save the DataFrame without it's index as a csv file with that name.
 5. Call `gen_plots()` to create and save desired plots to the output folder.
 
+## Tests and Validation
+[back to top](#implementation)
+
+Unit tests exist to assert that specific behavior occurs in specific points in the code. They all live in `roams/tests/`. Each test file (`"test_<name>.py"`) contains tests for a specific part of the code described above. They assert that errors are raised in the presence of specific inputs or context, that units are being handled as expected (as applicable), and that returned values match expectation exactly. In total, these tests cover:
+
+* Aerial input behavior
+* Simulated input behavior
+* GHGI & Production input behavior
+* Covered production input behavior
+* ROAMSConfig input behavior
+* ROAMSModel computation behavior
+* Stratification computation behavior
+* Transition point computation behavior
+* Unit conversion functionality
+
+These tests are hopefully comprehensive enough, but obviously no test suite can be perfect. Passing tests are a good sign that changes have not broken anything, but not proof. You will always require some human judgement to have confidence that passing tests do in fact cover all the important behavior, and are usefully testing important components. Failing tests almost certainly mean that something - perhaps even some tests themselves - need to be changed.
+
+### Validation
+
+"Validation", in this context, means checking the results produced by this code with results produced by a different implementation of the same model. The results produced by this python model have been validated against a prior implementation of this model (used for [this paper](https://doi.org/10.1038/s41586-024-07117-5)) in Analytica - proprietary GUI-based modeling software. A part of this codebase (in `roams/tests/validation/deterministic_validation.py`) define a deterministic version of the generic `ROAMSModel`, and execute the logic on a small dataset. 
+
+In a small `unittest.TestCase` in that file, it asserts that the results of this run exactly match that produced by Analytica. These unit tests are included in the unit test suite. You can also run this validation exercise as a script (`python roams/tests/validation/deterministic_validation.py`) to run that version of the model and get a `"_deterministic_validation_exercise"` set of results saved to your `run_results` folder. These results likely won't be very interesting to you UNLESS you have access to the Analytica model ran on the same input values.
+
 ## Computational Resources
+[back to top](#implementation)
 
 Memory is the primary resource demanded by the `ROAMSModel`. The amount of memory used is fundamentally tied to only a few inputs:
 

@@ -12,6 +12,7 @@ To read more about the model or underlying methodology, read the [methodology do
 
 * [Installation](#installation)
 * [Usage](#usage)
+* [Scripts](#scripts)
 * [Tests and Validation](#tests-and-validation)
 * [Contributing](#contributing)
 * [Input File Format](#input-file-format)
@@ -48,6 +49,25 @@ if __name__=="__main__":
 After calling `perform_analysis()`, the model that's ran will produce a folder in `run_results/` of the repository, named by the `foldername` specified in the input file. If the folder already existed, the content will be overwritten.
 
 To get started with creating your own input file, read the [input file structure section](#input-file-format)
+
+## Scripts
+[go to top](#roams)
+
+Scripts that make use of the code are in the `scripts/` folder. There is currently only one: `run_roams_model.py`.
+
+### run_roams_model
+
+This script allows users to run the `ROAMSModel` on an input file, and so only takes one required argument: the path to the input file. You can run the model on an input file as follows from your terminal, with the right python environment activated:
+
+```shell
+> python scripts/run_roams_model.py "path/to/your/input/file.json"
+```
+
+You can direct the code to log at the debug level to the console with the `--debug` flag (it will always be logged at debug level to the log file):
+
+```shell
+> python scripts/run_roams_model.py "path/to/your/input/file.json" --debug
+```
 
 ## Tests and Validation
 [go to top](#roams)
