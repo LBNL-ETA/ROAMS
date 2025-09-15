@@ -10,6 +10,7 @@ Currently, the only known use case is to run a ROAMS model for the purpose of re
 * [Using a custom ROAMS Model](#using-a-custom-roams-model)
 * [Adding or altering input behavior](#adding-inputs-changing-behavior)
 * [Making new or altered outputs](#making-new-or-altered-outputs)
+* [Result replication, and providing for result replication](#replicating-results)
 
 ## Running the ROAMS Model with an input file
 [Back to the top](#use-cases)
@@ -187,3 +188,24 @@ if __name__=="__main__":
 ```
 
 If you've created an output modification you believe to be substantially valuable as an option for other researchers, or perhaps is even preferable to the existing methodology, you are encouraged to follow the [contribution guidelines](/README.md#contributing) to bring your changes into the main code branch for everyone to more easily use.
+
+## Replicating results
+[Back to the top](#use-cases)
+
+### Providing for the replication of your own results
+
+As a user you may want to version control an exact set of modifications you've made in order to provide for the reproduction of results in your original research. To do this, you have several options:
+
+* Depending the changes you've made, it may make sense to merge them into the main branch of the repository following the [contribution guidelines](/README.md#contributing) and make clear in your publication the resulting version of public code that you used.
+* If it doesn't make sense to try merging all the changes you made and that will be necessary for replication, you can tag the commit on your development branch and mention this specifically in your work. You can describe it as a branch of a specific version of the ROAMS code.
+* If you plan on making substantial extensions and/or alterations to the code here, you could fork the repository and reference your new codebase (and appropriate version thereof) in your work. I wouldn't advise this unless you have an intention to continue developing that codebase for a completely distinct purpose than that of the ROAMS model.
+
+In whichever case, you will have to provide a copy of your input file and all of the data inputs that it points to.
+
+### Replicating prior behavior
+
+It's possible to end up in a situation where you want to use a prior version of the model to replicate results. In this case, it should be as simple as checking out a prior version of the code with the correct tag, and using the correct input file and datasets.
+
+In a more complicated case, you may want to use some of the latest available behavior, but have the model use older methods in a piece or pieces of the code. In such a case, I would suggest branching from the latest version of the ROAMS code, and patching over the latest behavior with code from the relevant older versions. If the results of this frankenstein model are important to your research, you should tag a functional commit of that branch and mention it in your work.
+
+**Avoid adding arguments or features to the latest ROAMS code that are only designed to replicate outdated behavior. This is what version control is for!**
