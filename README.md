@@ -130,6 +130,8 @@ The ROAMS Model is intended to change over time in order to fix bugs, update ass
 
 The code is capable of of reading a JSON input file, which holds a simple flat dictionary structure. Here's a table that describes the keys of this flat dictionary input structure. Note that when reading JSON files, `null` will become `None` in python, and the booleans `true/false` become `True/False`.
 
+You can find an example input embodied in the small [validation exercise](/roams/tests/validation/deterministic_validation.py), which is a runnable script (and part of unit test cases) that will produce example outputs in `run_results/` from example inputs. Rather than having an input file, the input is passed as a dictionary defined within the python file. **NOTE** that the input data used for that exercise comes from real-world studies, but is incomplete and does not produce results representative of reality. Do not use the resulting values as an indication of correctness for your work.
+
 | Field | Usage | Example |
 |---|---|---|
 | "sim_em_file" | The file path to a file holding the simulated production emissions to sample from, and optionally the simulated production for each simulated well | `"/path/to/my/sim/results.csv"` |
