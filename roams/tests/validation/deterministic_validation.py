@@ -93,7 +93,7 @@ class DeterministicROAMSModel(ROAMSModel):
 
         Returns:
             np.ndarray
-        """        
+        """
         sub_mdl_dist = self.cfg.prodSimResults.simulated_emissions.copy()
 
         sub_mdl_sample = np.tile(
@@ -103,7 +103,9 @@ class DeterministicROAMSModel(ROAMSModel):
         return sub_mdl_sample
     
     def combine_prod_samples(self):
-        aerial_cumsum = self.prod_tot_aerial_sample.cumsum(axis=0) + self.prod_partial_detection_emissions.cumsum(axis=0)
+        emiss, pd_correction = self.aerial_samples["production"]
+
+        aerial_cumsum = emiss.cumsum(axis=0) + pd_correction.cumsum(axis=0)
         
         # Convert it into a decreasing cumulative total
         aerial_cumsum = aerial_cumsum.max(axis=0) - aerial_cumsum
@@ -116,7 +118,7 @@ class DeterministicROAMSModel(ROAMSModel):
         
         if self.cfg.prod_transition_point is None:
                 self.prod_tp = find_transition_point(
-                    aerial_x = self.prod_tot_aerial_sample,
+                    aerial_x = emiss,
                     aerial_y = aerial_cumsum,
                     sim_x = sim_data,
                     sim_y = simmed_cumsum,
@@ -124,8 +126,8 @@ class DeterministicROAMSModel(ROAMSModel):
         elif isinstance(self.cfg.prod_transition_point,(int,float,)):
             self.prod_tp = np.array([self.cfg.prod_transition_point]*self.cfg.n_mc_samples)
 
-        self.combined_samples = self.simulated_sample.copy()
-        pd_samples = np.zeros(self.combined_samples.shape)
+        self.prod_combined_samples = self.simulated_sample.copy()
+        pd_samples = np.zeros(self.prod_combined_samples.shape)
 
         # For each of the n_samples columns, replace emissions below transition point with 
         # samples (w/ replacement) from the simulated values < transition point
@@ -135,22 +137,22 @@ class DeterministicROAMSModel(ROAMSModel):
             tp = self.prod_tp[n]
             
             # Set simulated emissions above TP to 0
-            self.combined_samples[self.combined_samples[:,n]>=tp,n] = 0
+            self.prod_combined_samples[self.prod_combined_samples[:,n]>=tp,n] = 0
 
             # Get the aerial sample above transition point and corresponding partial detection
-            aerial_sample = self.prod_tot_aerial_sample[self.prod_tot_aerial_sample[:,n]>=tp,n]
-            pd_emissions = self.prod_partial_detection_emissions[self.prod_tot_aerial_sample[:,n]>=tp,n]
+            aerial_sample = emiss[emiss[:,n]>=tp,n]
+            pd_emissions = pd_correction[emiss[:,n]>=tp,n]
 
             # For all preceding indices, insert random simulated emissions below the transition point
             # self.combined_samples[:idx_above_transition,n] = sim_below_transition[-min(len(sim_below_transition),idx_above_transition):]
-            self.combined_samples[:len(aerial_sample),n] = aerial_sample
+            self.prod_combined_samples[:len(aerial_sample),n] = aerial_sample
             pd_samples[:len(aerial_sample),n] = pd_emissions
         
         # Re-sort the newly combined records.
-        combined_sort_idx = self.combined_samples.argsort(axis=0)
+        combined_sort_idx = self.prod_combined_samples.argsort(axis=0)
         for n in range(self.cfg.n_mc_samples):
             # Sort the combined samples column-wise
-            self.combined_samples[:,n] = self.combined_samples[combined_sort_idx[:,n],n]
+            self.prod_combined_samples[:,n] = self.prod_combined_samples[combined_sort_idx[:,n],n]
 
             # Sort the corresponding extra_emissions_for_cdf
             pd_samples[:,n] = pd_samples[combined_sort_idx[:,n],n]
@@ -175,9 +177,11 @@ class ROAMSValidationTests(TestCase):
         expected value, as well as correct associated partial 
         detection values.
         """
+        prod_emiss, prod_pd = self.model.aerial_samples["production"]
+
         # Total aerial emissions, regardless of transition point
         np.testing.assert_array_almost_equal(
-            self.model.prod_tot_aerial_sample.sum(axis=0)*1e-3,
+            prod_emiss.sum(axis=0)*1e-3,
             np.array([76.8050266393258]*100),
             9
         )
@@ -185,7 +189,7 @@ class ROAMSValidationTests(TestCase):
         # Total aerial emissions, above transition point only
         np.testing.assert_array_almost_equal(
             # [sum of ith emissions≥ith transition point for i in range(100)]
-            np.array([self.model.prod_tot_aerial_sample[self.model.prod_tot_aerial_sample[:,i]>=self.model.prod_tp[i],i].sum() for i in range(100)])*1e-3,
+            np.array([prod_emiss[prod_emiss[:,i]>=self.model.prod_tp[i],i].sum() for i in range(100)])*1e-3,
             np.array([76.591769194947]*100),
             9
         )
@@ -193,7 +197,7 @@ class ROAMSValidationTests(TestCase):
         # Partial detection emissions, accounting for transition point
         # (no record not accounting for it)
         np.testing.assert_array_almost_equal(
-            self.model.prod_partial_detection_emissions.sum(axis=0)*1e-3,
+            np.array([prod_pd[prod_emiss[:,i]>=self.model.prod_tp[i],i].sum() for i in range(100)])*1e-3,
             np.array([4.1519379448231]*100),
             9
         )
@@ -204,9 +208,11 @@ class ROAMSValidationTests(TestCase):
         expected value, as well as correct associated partial 
         detection values.
         """
+        mid_emiss, mid_pd = self.model.aerial_samples["midstream"]
+
         # Total aerial emissions, regardless of transition point
         np.testing.assert_array_almost_equal(
-            self.model.midstream_tot_aerial_sample.sum(axis=0)*1e-3,
+            mid_emiss.sum(axis=0)*1e-3,
             np.array([15.1410791296653]*100),
             9
         )
@@ -214,7 +220,7 @@ class ROAMSValidationTests(TestCase):
         # Total aerial emissions, above transition point only
         np.testing.assert_array_almost_equal(
             # [sum of ith emissions≥transition point for i in range(100)]
-            np.array([self.model.midstream_tot_aerial_sample[self.model.midstream_tot_aerial_sample[:,i]>=self.model.cfg.midstream_transition_point,i].sum() for i in range(100)])*1e-3,
+            np.array([mid_emiss[mid_emiss[:,i]>=self.model.cfg.midstream_transition_point,i].sum() for i in range(100)])*1e-3,
             np.array([15.1410791296653]*100),
             9
         )
@@ -222,7 +228,7 @@ class ROAMSValidationTests(TestCase):
         # Partial detection emissions, accounting for transition point
         # (no record not accounting for it)
         np.testing.assert_array_almost_equal(
-            self.model.midstream_partial_detection_emissions.sum(axis=0)*1e-3,
+            mid_pd.sum(axis=0)*1e-3,
             np.array([0.944727993180192]*100),
             9
         )
@@ -242,7 +248,7 @@ class ROAMSValidationTests(TestCase):
         # Total aerial emissions, above transition point only
         np.testing.assert_array_almost_equal(
             # [sum of ith emissions < ith transition point for i in range(100)]
-            np.array([self.model.combined_samples[self.model.combined_samples[:,i]<self.model.prod_tp[i],i].sum() for i in range(100)])*1e-3,
+            np.array([self.model.prod_combined_samples[self.model.prod_combined_samples[:,i]<self.model.prod_tp[i],i].sum() for i in range(100)])*1e-3,
             np.array([3.036252812503]*100),
             9
         )
@@ -302,5 +308,7 @@ class ROAMSValidationTests(TestCase):
             os.rmdir(f)
 
 if __name__=="__main__":
-    model = DeterministicROAMSModel(INPUT)
-    model.perform_analysis()
+    # model = DeterministicROAMSModel(INPUT)
+    # model.perform_analysis()
+    import unittest
+    unittest.main()
