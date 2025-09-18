@@ -16,16 +16,25 @@ def stratify_sample(
         sim_production : np.ndarray,
         covered_productivity : np.ndarray,
         n_infra : int,
+        n_mc_samples : int,
         quantiles : tuple[float] = QUANTILES,
     ) -> np.ndarray:
     """
     Take an array of simulated emissions and corresponding production, 
-    and sample the emissions it into a `n_infra`-length array.
+    and perform a stratified sampling of the emissions into a 
+    `n_infra` x `n_mc_iterations` size table.
 
-    The goal is to stratify the sampling, so that, for example, 
-    simulated sites with production that fall between the 10th and 20th 
-    percentiles of production in `covered_productivity` will be sampled 
-    into 10 percent of the resulting observations.
+    The process of stratification is intended to make it so that the 
+    simulated emissions correspond to simulated productivity whose 
+    distribution better matches the given covered productivity distribution.
+
+    It begins by defining pre-specified quantiles of simulated productivity. 
+    Using these quantile boundaries, the code then computes the fraction of 
+    the covered productivity distribution that falls into each bin of 
+    simulated productivity. It uses this fraction to then estimate a total 
+    number of simulated infrastructure (n_infra) that should be represented 
+    by sampling simulated emissions associated to the simulated productivity 
+    in this bin.
 
     This process is repeated for each of the quantile bins specified in 
     the `quantiles` argument.
@@ -42,13 +51,29 @@ def stratify_sample(
             `covered_productivity`.
 
         covered_productivity (np.ndarray):
-            A 1-d array representing the best estimate of actual production 
-            in the surveyed area, in identical units to `sim_production`.
+            A 1-d array representing the best estimate distribution of actual 
+            production in the surveyed area, in identical units to 
+            `sim_production`. The values in this array should correspond to 
+            productivity bounds of a uniform quantization of covered 
+            productivity. For example, there could be 1000 values, each 
+            representing the 0.1 percentile bound, the 0.2 percentile bound, 
+            etc. Or there could be 100 values representing the 1% bound, the 
+            2% bound, etc. The important things are that (a) each value 
+            represents a bin of the same size, and that for best results, (b) 
+            the size the bins is at most the size of the smallest bin in 
+            `quantiles` (e.g., if the smallest `quantile` bin is a 0.1% 
+            increment, covered_productivity should be at most in 0.1% 
+            increments, i.e. at least 1000 values).
 
         n_infra (int):
             The size of the resulting array to return, intended to represent 
             the amount of infrastructure you're trying to create 
             estimates for.
+
+        n_mc_samples (int):
+            The number of monte-carlo iterations being done, which will 
+            control the size of the returned table, specifically the number 
+            of columns.
 
         quantiles (tuple[float], optional): 
             The quantile bins (including the limits 0 and 1) into which the 
@@ -62,8 +87,9 @@ def stratify_sample(
 
     Returns:
         np.ndarray: 
-            A `n_infra`-length array representing a production-weighted sample 
-            of the simulated emissions data.
+            A `n_infra` x `n_mc_iterations` table representing a 
+            production-weighted sample of the simulated emissions data, for 
+            each monte-carlo iteration of the ROAMS process.
     """    
     if len(sim_emissions)!=len(sim_production):
         raise ValueError(
@@ -136,7 +162,7 @@ def stratify_sample(
     prod_count_by_bin.loc[largest_group] += (n_infra - prod_count_by_bin.sum())
 
     # Create the output array to fill then return
-    stratified_sample = np.zeros(n_infra)
+    stratified_sample = np.zeros((n_infra,n_mc_samples))
 
     # index for inserting into stratified_sample
     _i = 0
@@ -146,15 +172,15 @@ def stratify_sample(
         em = sim_emissions[(sim_production>p_min) & (sim_production<=p_max)]
 
         # sample with replacement from these simulated emissions
-        sample = np.random.choice(em,n_samples,replace=True)
+        sample = np.random.choice(em,(n_samples,n_mc_samples),replace=True)
 
         # Insert the sample into the stratified sample
-        stratified_sample[_i:_i+len(sample)] = sample
+        stratified_sample[_i:_i+len(sample),:] = sample
 
         # Increment the insertion index
         _i += len(sample)
 
-    # Sort the resulting array of sampled emissions values
-    stratified_sample.sort()
+    # Sort the resulting array of sampled emissions values column-wise
+    stratified_sample.sort(axis=0)
 
     return stratified_sample
