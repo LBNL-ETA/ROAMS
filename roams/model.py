@@ -150,25 +150,33 @@ class ROAMSModel:
                 table of values. Each value is a simulated emissions value.
         """        
         if self.cfg.stratify_sim_sample:
-            sub_mdl_dist = stratify_sample(
+            self.log.info(
+                "Doing stratified sampling of simulated emissions into a "
+                f"{self.cfg.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
+            )
+            # The simulated sample is drawn is drawn in a stratified manner 
+            # directly.
+            sub_mdl_sample = stratify_sample(
                 self.cfg.prodSimResults.simulated_emissions,
                 self.cfg.prodSimResults.simulated_production,
-                self.cfg.coveredProductivity.ng_production_dist_volumetric,
-                n_infra=self.cfg.num_wells_to_simulate
+                self.cfg.coveredProductivity.ng_production_dist_volumetric*self.wells_per_site,
+                n_infra=self.cfg.num_wells_to_simulate,
+                n_mc_samples=self.cfg.n_mc_samples,
             )
+        
         else:
-            sub_mdl_dist = self.cfg.prodSimResults.simulated_emissions
+            # Sample the raw data directly into the simulated sample
+            self.log.info(
+                "Sampling raw simulated emissions data into a "
+                f"{self.cfg.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
+            )
+            sub_mdl_sample = np.random.choice(
+                self.cfg.prodSimResults.simulated_emissions,
+                (self.cfg.num_wells_to_simulate,self.cfg.n_mc_samples),
+                replace=True
+            )
 
-        # Sample the stratified representation for each monte carlo iteration
-        self.log.info(
-            "Sampling simulated emissions data into a "
-            f"{self.cfg.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
-        )
-        sub_mdl_sample = np.random.choice(
-            sub_mdl_dist,
-            (self.cfg.num_wells_to_simulate,self.cfg.n_mc_samples),
-            replace=True
-        )
+        # Sort the simulated sample column-wise
         sub_mdl_sample.sort(axis=0)
 
         return sub_mdl_sample
@@ -758,6 +766,7 @@ class ROAMSModel:
                 f"Midstream Aerial Only Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})",
                 f"Midstream Partial Detection Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})",
                 f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})",
+                f"Total Production + Midstream CH4 Emissions Estimate, All Sources (thousand {COMMON_EMISSIONS_UNITS})",
             ],
             columns=pd.MultiIndex.from_product(
                 [["By Itself","Accounting for Transition Point"],quantity_cols],
@@ -824,6 +833,32 @@ class ROAMSModel:
         # This will be combined midstream aerial+partial detection, but ONLY total contributions above each transition point
         sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + sum_emiss_partial_abovetp
         prod_and_mid_summary.loc[f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb_abovetp)[quantity_cols].values
+
+        # Total emissions across all emissions sizes and asset types
+        total_emissions = (
+            # Production aerial above transition point
+            np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+
+            # Production partial detection (only above TP)
+            + self.prod_partial_detection_emissions.sum(axis=0)/1e3
+
+            # Contribution of simulated production emissions below TP
+            + np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+
+            # Midstream aerial above transition point
+            + np.array([self.midstream_tot_aerial_sample[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+
+            # Midstream partial detection (only above TP)
+            + np.array([self.midstream_partial_detection_emissions[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+        )
+        # Quantify everything except sub-detection-level midstream emissions
+        total_quant = self.mean_and_quantiles_fromsamples(total_emissions)[quantity_cols]
+
+        # Sub-MDL midstream emissions
+        total_quant["Avg"] += self.submdl_ch4_midstream_emissions["mid"]/1e3
+        total_quant["2.5% CI"] = np.nan
+        total_quant["97.5% CI"] = np.nan
+        prod_and_mid_summary.loc[f"Total Production + Midstream CH4 Emissions Estimate, All Sources (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = total_quant.values
 
         # Put the resulting table into self.table_outputs
         self.table_outputs["Production and Midstream Summary"] = prod_and_mid_summary.reset_index()
