@@ -150,25 +150,33 @@ class ROAMSModel:
                 table of values. Each value is a simulated emissions value.
         """        
         if self.cfg.stratify_sim_sample:
-            sub_mdl_dist = stratify_sample(
+            self.log.info(
+                "Doing stratified sampling of simulated emissions into a "
+                f"{self.cfg.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
+            )
+            # The simulated sample is drawn is drawn in a stratified manner 
+            # directly.
+            sub_mdl_sample = stratify_sample(
                 self.cfg.prodSimResults.simulated_emissions,
                 self.cfg.prodSimResults.simulated_production,
                 self.cfg.coveredProductivity.ng_production_dist_volumetric,
-                n_infra=self.cfg.num_wells_to_simulate
+                n_infra=self.cfg.num_wells_to_simulate,
+                n_mc_samples=self.cfg.n_mc_samples,
             )
+        
         else:
-            sub_mdl_dist = self.cfg.prodSimResults.simulated_emissions
+            # Sample the raw data directly into the simulated sample
+            self.log.info(
+                "Sampling raw simulated emissions data into a "
+                f"{self.cfg.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
+            )
+            sub_mdl_sample = np.random.choice(
+                self.cfg.prodSimResults.simulated_emissions,
+                (self.cfg.num_wells_to_simulate,self.cfg.n_mc_samples),
+                replace=True
+            )
 
-        # Sample the stratified representation for each monte carlo iteration
-        self.log.info(
-            "Sampling simulated emissions data into a "
-            f"{self.cfg.num_wells_to_simulate}x{self.cfg.n_mc_samples} table."
-        )
-        sub_mdl_sample = np.random.choice(
-            sub_mdl_dist,
-            (self.cfg.num_wells_to_simulate,self.cfg.n_mc_samples),
-            replace=True
-        )
+        # Sort the simulated sample column-wise
         sub_mdl_sample.sort(axis=0)
 
         return sub_mdl_sample

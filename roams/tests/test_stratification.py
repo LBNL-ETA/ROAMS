@@ -17,6 +17,7 @@ class StratificationTests(TestCase):
                 np.array([1,2,3,4]),
                 np.array([1,2,3,4]),
                 10,
+                10,
             )
     
     def test_reproduce_initialdist(self):
@@ -34,20 +35,22 @@ class StratificationTests(TestCase):
             np.arange(1,1001), # simulated production is 1 -> 1000
             np.arange(1,1001), # covered production is 1 -> 1000
             1000,
+            1,
             quantiles = (0,*[i*.001 for i in range(1,1001)])
         )
 
-        np.testing.assert_array_equal(s,np.arange(1,1001))
+        np.testing.assert_array_equal(s.squeeze(),np.arange(1,1001))
     
         s = stratify_sample(
             np.arange(1,5), # Emissions are 1 -> 4
             np.arange(1,5), # simulated production is 1 -> 4
             np.arange(1,5), # covered production is 1 -> 4
             4,
+            1,
             quantiles = (0,.25,.5,.75,1.)
         )
 
-        np.testing.assert_array_equal(s,np.arange(1,5))
+        np.testing.assert_array_equal(s.squeeze(),np.arange(1,5))
     
     def test_half_production_overlap(self):
         """
@@ -61,20 +64,22 @@ class StratificationTests(TestCase):
             np.arange(1,1001), # simulated production is 1 -> 1000
             np.arange(1,501), # covered production is 1 -> 500
             500,
+            1,
             quantiles = (0,*[i*.001 for i in range(1,1001)])
         )
 
-        np.testing.assert_array_equal(s,np.arange(1,501))
+        np.testing.assert_array_equal(s.squeeze(),np.arange(1,501))
     
         s = stratify_sample(
             np.arange(1,5), # Emissions are 1 -> 4
             np.arange(1,5), # simulated production is 1 -> 4
             np.array([1,2]), # covered production is 1 -> 2
             2,
+            1,
             quantiles = (0,.25,.5,.75,1.)
         )
 
-        np.testing.assert_array_equal(s,np.array([1,2]))
+        np.testing.assert_array_equal(s.squeeze(),np.array([1,2]))
     
     def test_half_simulated_overlap(self):
         """
@@ -88,20 +93,22 @@ class StratificationTests(TestCase):
             np.arange(1,1001), # simulated production is 1 -> 1000
             np.arange(1,2000), # covered production is 1 -> 1999
             1000,
+            1,
             quantiles = (0,*[i*.001 for i in range(1,1001)])
         )
 
-        np.testing.assert_array_equal(s,np.arange(1,1001))
+        np.testing.assert_array_equal(s.squeeze(),np.arange(1,1001))
     
         s = stratify_sample(
             np.arange(1,5), # Emissions are 1 -> 4
             np.arange(1,5), # simulated production is 1 -> 4
             np.arange(1,8), # covered production is 1 -> 7
             4,
+            1,
             quantiles = (0,.25,.5,.75,1.)
         )
 
-        np.testing.assert_array_equal(s,np.arange(1,5))
+        np.testing.assert_array_equal(s.squeeze(),np.arange(1,5))
 
     def test_assertraises_ValueError(self):
         """
@@ -120,6 +127,7 @@ class StratificationTests(TestCase):
                 np.arange(1,1001), # simulated production is 1 -> 1000
                 np.arange(1,2002), # covered production is 1 -> 2001
                 1000,
+                1,
                 quantiles = (0,*[i*.001 for i in range(1,1001)])
             )
 
@@ -133,7 +141,8 @@ class StratificationTests(TestCase):
                 np.arange(1000),
                 np.arange(1000),
                 np.arange(1001),
-                1000
+                1000,
+                10
             )
 
 
