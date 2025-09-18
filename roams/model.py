@@ -159,7 +159,7 @@ class ROAMSModel:
             sub_mdl_sample = stratify_sample(
                 self.cfg.prodSimResults.simulated_emissions,
                 self.cfg.prodSimResults.simulated_production,
-                self.cfg.coveredProductivity.ng_production_dist_volumetric,
+                self.cfg.coveredProductivity.ng_production_dist_volumetric*self.wells_per_site,
                 n_infra=self.cfg.num_wells_to_simulate,
                 n_mc_samples=self.cfg.n_mc_samples,
             )
