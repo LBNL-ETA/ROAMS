@@ -796,28 +796,30 @@ class ROAMSModel:
         sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + sum_emiss_partial_abovetp
         prod_and_mid_summary.loc[f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb_abovetp)[quantity_cols].values
 
-        # Total emissions across all emissions sizes and asset types
+        # Total emissions across all emissions sizes and production+midstream asset types
         total_emissions = (
             # Production aerial above transition point
-            np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+            np.array([prod_emiss[:,n][prod_emiss[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
 
             # Production partial detection (only above TP)
-            + self.prod_partial_detection_emissions.sum(axis=0)/1e3
+            + np.array([prod_partial_detec[:,n][prod_emiss[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
 
             # Contribution of simulated production emissions below TP
-            + np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+            + np.array([self.prod_combined_samples[:,n][self.prod_combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
 
             # Midstream aerial above transition point
-            + np.array([self.midstream_tot_aerial_sample[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+            + np.array([mid_emiss[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
 
             # Midstream partial detection (only above TP)
-            + np.array([self.midstream_partial_detection_emissions[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+            + np.array([mid_partial_detec[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
         )
         # Quantify everything except sub-detection-level midstream emissions
         total_quant = self.mean_and_quantiles_fromsamples(total_emissions)[quantity_cols]
 
-        # Sub-MDL midstream emissions
+        # Add sub-MDL midstream emissions
         total_quant["Avg"] += self.submdl_ch4_midstream_emissions["mid"]/1e3
+        
+        # The CI can't be computed normally because the midstream value is a point estimate.
         total_quant["2.5% CI"] = np.nan
         total_quant["97.5% CI"] = np.nan
         prod_and_mid_summary.loc[f"Total Production + Midstream CH4 Emissions Estimate, All Sources (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = total_quant.values
@@ -1013,7 +1015,7 @@ class ROAMSModel:
                 index=pd.MultiIndex.from_product(
                     [
                         # Index level 0 = Emissions distribution being characterized
-                        ["Aerial Only","Partial Detection Correction","Combined"],
+                        ["Aerial Only","Partial Detection Correction","Aerial + Partial Detection"],
                         
                         # Index level 1 = How the distribution is being characterized
                         [f"Total Emissions ({COMMON_EMISSIONS_UNITS})","Fractional Volumetric Loss (kgCH4 emitted / kgCH4 produced)","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)"],
@@ -1044,9 +1046,9 @@ class ROAMSModel:
                 group_df.loc[("Partial Detection Correction","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)",q),"value"] = energy_frac_loss_pd.loc[q]
                 
                 # Assign combined distribution characterization
-                group_df.loc[("Combined",f"Total Emissions ({COMMON_EMISSIONS_UNITS})",q),"value"] = combined_quant.loc[q]
-                group_df.loc[("Combined","Fractional Volumetric Loss (kgCH4 emitted / kgCH4 produced)",q),"value"] = frac_loss_tot.loc[q]
-                group_df.loc[("Combined","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)",q),"value"] = energy_frac_loss_tot.loc[q]
+                group_df.loc[("Aerial + Partial Detection",f"Total Emissions ({COMMON_EMISSIONS_UNITS})",q),"value"] = combined_quant.loc[q]
+                group_df.loc[("Aerial + Partial Detection","Fractional Volumetric Loss (kgCH4 emitted / kgCH4 produced)",q),"value"] = frac_loss_tot.loc[q]
+                group_df.loc[("Aerial + Partial Detection","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)",q),"value"] = energy_frac_loss_tot.loc[q]
 
             group_df.reset_index(inplace=True)
 
