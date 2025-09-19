@@ -87,6 +87,8 @@ class ROAMSModel:
         # Quantiles used in quantification of MC results 
         # (no reason to mess with this)
         self._quantiles = (.025,.975)
+        # Label format into which quantiles should be put
+        self._lbl = "{}% CI"
         self.log.debug(f"{self._quantiles = }")
     
     def perform_analysis(self):
@@ -116,17 +118,63 @@ class ROAMSModel:
         partial detection correction.)
         """
         self.simulated_sample = self.make_simulated_sample()
-        (
-            self.prod_tot_aerial_sample, 
-            self.prod_partial_detection_emissions
-        ) = self.make_aerial_prod_sample()
-        
-        # Get the midstream sampled aerial emissions
-        (
-            self.midstream_tot_aerial_sample, 
-            self.midstream_partial_detection_emissions
-        ) = self.make_aerial_midstream_sample()
+        self.aerial_samples = self.make_aerial_samples()
 
+    def make_aerial_samples(self) -> dict:
+        """
+        Make a dictionary of the form:
+            
+            {asset group : (aerial emissions, partial detection emissions)}
+
+        and return it. The result will be the non-zero-padded aerial 
+        emissions sampling for each asset group identified in the input file.
+
+        Returns:
+            dict:
+                A dictionary with asset group (string) keys, and tuple 
+                values. The first entry in each tuple is sampled and adjusted 
+                aerial emissions. The second entry is the corresponding 
+                partial detection correction.
+        """
+        aerial_samples = dict()
+
+        for group in self.cfg.asset_groups.keys():
+            emiss, wind_norm_emiss = self.get_aerial_survey_sample(infra=group)
+            
+            self.log.info(
+                f"The {group} aerial sample has size {emiss.shape}."
+            )
+            self.log.debug(
+                f"The mean total {group} aerial sample emissions are "
+                f"{emiss.sum(axis=0).mean():.2f} {COMMON_EMISSIONS_UNITS}"
+            )
+            
+            # Define an addition to the cumulative sum based on the wind-normalized
+            # emissions, if the form of the partial detection correction is "add to cumsum"
+            # (otherwise maintain the calculation structure, but just use a table of 0s)
+            if self.cfg.partial_detection_correction:
+                self.log.info(
+                    f"Using {self.cfg.PoD_fn} on the sorted wind-normalized sample "
+                    f"of {group} emissions to define the probability of detection."
+                )
+                PoD = self.cfg.PoD_fn(wind_norm_emiss)
+                partial_detection_emiss = (1/PoD - 1)*emiss
+            else:
+                self.log.info(
+                    "No partial detection correction will be applied to the "
+                    "aerial sample."
+                )
+                partial_detection_emiss = np.zeros(emiss.shape)
+
+            sort_idx = np.argsort(emiss,axis=0)
+            for mc_run in range(emiss.shape[1]):
+                emiss[:,mc_run] = emiss[sort_idx[:,mc_run],mc_run]
+                partial_detection_emiss[:,mc_run] = partial_detection_emiss[sort_idx[:,mc_run],mc_run]
+            
+            aerial_samples[group] = (emiss, partial_detection_emiss)
+
+        return aerial_samples
+    
     def make_simulated_sample(self) -> np.ndarray:
         """
         Take the long list of simulated emissions, and return a sample of 
@@ -180,127 +228,6 @@ class ROAMSModel:
         sub_mdl_sample.sort(axis=0)
 
         return sub_mdl_sample
-    
-    def make_aerial_midstream_sample(self) -> tuple[np.ndarray]:
-        """
-        Do the midstream aerial sampling (including intermittency), and also 
-        the partial detection correction as specified by 
-        self.partial_detection_correction.
-
-        Returns:
-            tuple[np.ndarray]: 
-                A 2-tuple of sampled midstream aerial emissions (emissions 
-                sampled for each source) and corresponding wind-normalized 
-                emissions. Each will have self.cfg.n_mc_samples columns, and 
-                a number of rows equal to the number of unique midstream 
-                sources.
-                The entries in each are aligned, such that the [i,j]th entry 
-                in each table corresponds to the same original sampled 
-                plume observation jth monte-carlo iteration.
-        """
-        mid_aerial_site_sample, mid_wind_norm_sample = self.get_aerial_survey_sample(
-            infra="midstream"
-        )
-        self.log.info(
-            f"The midstream aerial sample is {mid_aerial_site_sample.shape=}."
-        )
-        self.log.debug(
-            "The mean total midstream aerial sample emissions are "
-            f"{mid_aerial_site_sample.sum(axis=0).mean():.2f} "
-            f"{COMMON_EMISSIONS_UNITS}"
-        )
-        
-        # Define an addition to the cumulative sum based on the wind-normalized
-        # emissions, if the form of the partial detection correction is "add to cumsum"
-        # (otherwise maintain the calculation structure, but just use a table of 0s)
-        if self.cfg.partial_detection_correction:
-            self.log.info(
-                f"Using {self.cfg.PoD_fn} on the sorted wind-normalized sample "
-                "of midstream emissions to define the probability of detection."
-            )
-            PoD = self.cfg.PoD_fn(mid_wind_norm_sample)
-            extra_emissions_for_cdf = (1/PoD - 1)*mid_aerial_site_sample
-        else:
-            self.log.info(
-                "No partial detection correction will be applied to the "
-                "aerial sample."
-            )
-            extra_emissions_for_cdf = np.zeros(mid_aerial_site_sample.shape)
-
-        return mid_aerial_site_sample, extra_emissions_for_cdf
-    
-    def make_aerial_prod_sample(self) -> tuple[np.ndarray]:
-        """
-        Do the aerial sampling of production sources (including intermittency)
-        and also the partial detection correction as specified by 
-        self.partial_detection_correction.
-
-        Returns:
-            tuple[np.ndarray]: 
-                A 2-tuple of sampled production aerial emissions (emissions 
-                sampled for each source) and corresponding wind-normalized 
-                emissions. Each will have self.cfg.n_mc_samples columns, and 
-                a number of rows equal to the total number of estimated 
-                wells in the region of interest (self.cfg.num_wells_to_simulate). 
-                The entries in each are aligned, such that the [i,j]th entry 
-                in each table corresponds to the same original sampled 
-                plume observation in the jth monte-carlo iteration.
-        """
-        prod_aerial_em_sample, prod_wind_norm_sample = self.get_aerial_survey_sample(
-            infra="production"
-        )
-        self.log.info(
-            f"The aerial production sample is size={prod_aerial_em_sample.shape}, "
-            f"and will be put into a table with {self.cfg.num_wells_to_simulate} "
-            "rows (with 0-padding)."
-        )
-        self.log.debug(
-            "The mean total aerial production sample emissions are "
-            f"{prod_aerial_em_sample.sum(axis=0).mean():.2f} "
-            f"{COMMON_EMISSIONS_UNITS}"
-        )
-
-        # Number of required extra rows to simulate all covered wells
-        # (these padding 0s may not be required)
-        required_extra_zeros = (
-            self.cfg.num_wells_to_simulate 
-            - prod_aerial_em_sample.shape[0] 
-        )
-        padding_zeros = np.zeros((required_extra_zeros,self.cfg.n_mc_samples))
-        
-        # Concatenate the extra samples onto the original draws, with zero padding
-        # representing all of the remaining wells up to num_wells_to_simulate
-        tot_aerial_sample = np.concat([prod_aerial_em_sample,padding_zeros],axis=0)
-        tot_windnorm_sample = np.concat([prod_wind_norm_sample,padding_zeros],axis=0)
-
-        # aerial_data_idx = index that sorts the sampled aerial emissions column-wise.
-        aerial_data_idx = np.argsort(tot_aerial_sample,axis=0)
-        
-        # In this loop, use the same index to sort each of the corresponding tables:
-        #   * Sampled aerial emissions
-        #   * corresponding wind-normalized emissions
-        for n in range(self.cfg.n_mc_samples):
-            tot_aerial_sample[:,n] = tot_aerial_sample[aerial_data_idx[:,n],n]
-            tot_windnorm_sample[:,n] = tot_windnorm_sample[aerial_data_idx[:,n],n]
-        
-        # Define an addition to the cumulative sum based on the wind-normalized
-        # emissions, if the form of the partial detection correction is "add to cumsum"
-        # (otherwise maintain the calculation structure, but just use a table of 0s)
-        if self.cfg.partial_detection_correction:
-            self.log.info(
-                f"Using {self.cfg.PoD_fn} on the sorted wind-normalized sample "
-                "of production emissions to define the probability of detection."
-            )
-            PoD = self.cfg.PoD_fn(tot_windnorm_sample)
-            extra_emissions_for_cdf = (1/PoD - 1)*tot_aerial_sample
-        else:
-            self.log.info(
-                "No partial detection correction will be applied to the "
-                "aerial sample."
-            )
-            extra_emissions_for_cdf = np.zeros(tot_aerial_sample.shape)
-
-        return tot_aerial_sample, extra_emissions_for_cdf
     
     def get_aerial_survey_sample(self,infra="production") -> tuple[np.ndarray]:
         """
@@ -448,15 +375,17 @@ class ROAMSModel:
         and sampled simulated emissions. By the time of calling this method, 
         these should be in the form of:
             
-            * `self.prod_tot_aerial_sample` : 
-                A (self.cfg.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
-                sampled, corrected, and perhaps noised aerial observations,
-                where intermittency has also been taken into account.
-            * `self.prod_partial_detection_emissions` : 
-                A (self.cfg.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
-                estimated extra emissions from the entire basin under study, 
-                intended to reflect the "missed" emissions from the partial 
-                detection correction.
+            * `self.aerial_samples["production"]` : 
+                A tuple of (emissions, partial detection correction). The 
+                emissions should be (num emitting wells)x(self.cfg.n_mc_samples) 
+                table of sampled, corrected, and perhaps noised aerial 
+                observations, where intermittency has also been taken into 
+                account.
+                The partial detection correction should be a 
+                (num emitting wells)x(self.cfg.n_mc_samples) table of estimated 
+                extra emissions from the entire basin under study, intended to 
+                reflect the "missed" emissions from the partial detection 
+                correction.
             * `self.simulated_sample` : 
                 A (self.cfg.num_wells_to_simulate)x(self.cfg.n_mc_samples) table of 
                 sampled simulated emissions, which should have already been 
@@ -479,6 +408,9 @@ class ROAMSModel:
 
         Lastly, the resulting combined distributions are sorted ascending.
         """
+        # Get (emissions, partial detection correction) paris for production
+        aerial_emissions, partial_detection = self.aerial_samples["production"]
+
         if self.cfg.prod_transition_point is None:
             self.log.info(
                 "No transition point was provided, it will be computed by "
@@ -486,7 +418,7 @@ class ROAMSModel:
             )
             # aerial_cumsum = combined increasing cumulative sum of sampled aerial 
             #   emissions AND contributions from partial detection.
-            aerial_cumsum = self.prod_tot_aerial_sample.cumsum(axis=0) + self.prod_partial_detection_emissions.cumsum(axis=0)
+            aerial_cumsum = aerial_emissions.cumsum(axis=0) + partial_detection.cumsum(axis=0)
             
             # Turn the cumulative sum into a decreasing quantity
             aerial_cumsum = aerial_cumsum.max(axis=0) - aerial_cumsum
@@ -501,7 +433,7 @@ class ROAMSModel:
             # Define the transition point based on the cumulative emissions 
             # distributions.
             self.prod_tp = find_transition_point(
-                aerial_x = self.prod_tot_aerial_sample,
+                aerial_x = aerial_emissions,
                 aerial_y = aerial_cumsum,
                 sim_x = sim_data,
                 sim_y = simmed_cumsum,
@@ -517,9 +449,24 @@ class ROAMSModel:
             )
             self.prod_tp = np.array([self.cfg.prod_transition_point]*self.cfg.n_mc_samples)
 
-        # To start the process, define `self.combined_samples` as the aerial sample.
-        # This is the desired shape, and some of the values are already what we want.
-        self.combined_samples = self.prod_tot_aerial_sample.copy()
+        # To start the process, define `self.combined_samples` and `
+        # self.prod_partial_detection_emissions` as [num wells to simulate]x[N MC samples]
+        # that hold the result of aerial sampling. Simulated values are to be 
+        # inserted into these tables.
+        # np.pad() adds a bunch of rows with 0s preceding the sampled values
+        self.prod_combined_samples = np.pad(
+            aerial_emissions,
+            ((self.cfg.num_wells_to_simulate-aerial_emissions.shape[0],0),(0,0)),
+            mode="constant",
+            constant_values=((0,0),(0,0))
+        )
+
+        self.prod_partial_detection_emissions = np.pad(
+            partial_detection,
+            ((self.cfg.num_wells_to_simulate-partial_detection.shape[0],0),(0,0)),
+            mode="constant",
+            constant_values=((0,0),(0,0))
+        )
 
         # Now go through each monte carlo iteration and combine the samples.
         for n in range(self.cfg.n_mc_samples):
@@ -531,7 +478,7 @@ class ROAMSModel:
             sim_below_transition = self.simulated_sample[:,n][self.simulated_sample[:,n]<tp]
 
             # Find the first index where the aerial emissions in this column are ≥transition point
-            idx_above_transition = np.argmin(self.combined_samples[:,n]<tp)
+            idx_above_transition = np.argmin(self.prod_combined_samples[:,n]<tp)
 
             if len(sim_below_transition)<idx_above_transition:
                 raise IndexError(
@@ -549,7 +496,7 @@ class ROAMSModel:
                 )
 
             # For all preceding indices, insert random simulated emissions below the transition point
-            self.combined_samples[:idx_above_transition,n] = np.random.choice(sim_below_transition,idx_above_transition,replace=True)
+            self.prod_combined_samples[:idx_above_transition,n] = np.random.choice(sim_below_transition,idx_above_transition,replace=True)
             
             # In any partial detection emissions tracked to be added directly to the cdf, zero out contributions associated to emissions below transition point.
             self.prod_partial_detection_emissions[:idx_above_transition,n] = 0
@@ -557,10 +504,10 @@ class ROAMSModel:
         # Re-sort the newly combined records. Maintain correspondence with the 
         # partial detection correction by getting the sorted index and using
         # for both.
-        combined_sort_idx = self.combined_samples.argsort(axis=0)
+        combined_sort_idx = self.prod_combined_samples.argsort(axis=0)
         for n in range(self.cfg.n_mc_samples):
             # Sort the combined samples column-wise
-            self.combined_samples[:,n] = self.combined_samples[combined_sort_idx[:,n],n]
+            self.prod_combined_samples[:,n] = self.prod_combined_samples[combined_sort_idx[:,n],n]
 
             # Sort the corresponding extra_emissions_for_cdf
             self.prod_partial_detection_emissions[:,n] = self.prod_partial_detection_emissions[combined_sort_idx[:,n],n]
@@ -644,8 +591,11 @@ class ROAMSModel:
         # Add summary table of production distribution
         self.make_prod_distr_summary()
 
-        # If covered_productivity exists, summarize fractional loss
+        # Summarize fractional loss using covered production
         self.make_fractional_loss()
+
+        # Summarize aerial survey samples per asset group
+        self.make_aerial_characterization()
 
         if self.save_mean_dist:
             # Add summary of production distributions (larger table)
@@ -671,20 +621,22 @@ class ROAMSModel:
         # Volumetric production fractional loss = [combined production distribution total emissions rate] / [covered productivity production rate]
         result[f"Mean fractional CH4 Loss in production ({COMMON_EMISSIONS_UNITS} lost / {COMMON_EMISSIONS_UNITS} produced)"] = (
             (
-                self.combined_samples.sum(axis=0).mean() 
+                self.prod_combined_samples.sum(axis=0).mean() 
                 + self.prod_partial_detection_emissions.sum(axis=0).mean()
             )
             /self.cfg.ch4_total_covered_production_mass
         )
         
+        mid_emiss, mid_pd_corr = self.aerial_samples["midstream"]
+        
         # Compute midstream aerial contribution above midstream transition point
         midstream_aerial_em_abovetp = (
             (
                 # midstream aerial samples total emissions, only including those ≥ tp
-                np.array([self.midstream_tot_aerial_sample[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])
+                np.array([mid_emiss[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])
                 
                 # midstream partial detection emissions, only including those with corresponding emissions ≥ tp
-                +np.array([self.midstream_partial_detection_emissions[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])
+                +np.array([mid_pd_corr[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])
             ).mean()/1e3
         )
         
@@ -719,7 +671,7 @@ class ROAMSModel:
             ENERGY_DENSITY_MJKG["c1"] 
             # x kgCH4/h <- COMMON_EMISSIONS_UNITS
             * (
-                self.combined_samples.sum(axis=0).mean() 
+                self.prod_combined_samples.sum(axis=0).mean() 
                 + self.prod_partial_detection_emissions.sum(axis=0).mean()
             )
             # x [24 kg/d per 1 kg/h]
@@ -773,24 +725,31 @@ class ROAMSModel:
             )
         )
         
+        # Get the production emissions and partial detection for quantification
+        prod_emiss, prod_partial_detec = self.aerial_samples["production"]
+
         # Report the sampled aerial production emissions distribution, regardless of transition point
-        sum_emiss_aerial = self.prod_tot_aerial_sample.sum(axis=0)/1e3
+        sum_emiss_aerial = prod_emiss.sum(axis=0)/1e3
         prod_and_mid_summary.loc[f"Production Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial)[quantity_cols].values
 
         # Report sampled aerial production emissions distributions above transition point
-        sum_emiss_aerial_abovetp = np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+        sum_emiss_aerial_abovetp = np.array([prod_emiss[:,n][prod_emiss[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
         prod_and_mid_summary.loc[f"Production Aerial Only Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial_abovetp)[quantity_cols].values
 
         # Report total partial detection of aerially surveyed production infrastructure
-        sum_emiss_partial = self.prod_partial_detection_emissions.sum(axis=0)/1e3
-        prod_and_mid_summary.loc[f"Production Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_partial)[quantity_cols].values
+        sum_emiss_partial = prod_partial_detec.sum(axis=0)/1e3
+        prod_and_mid_summary.loc[f"Production Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_partial)[quantity_cols].values
         
+        # Report sampled partial detection corrections corresponding to emissions above transition point
+        sum_pd_abovetp = np.array([prod_partial_detec[:,n][prod_emiss[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+        prod_and_mid_summary.loc[f"Production Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_pd_abovetp)[quantity_cols].values
+
         # Report combined production emissions from aerial sample AND partial detection correction
-        sum_emiss_aer_comb = (self.prod_tot_aerial_sample.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0))/1e3
+        sum_emiss_aer_comb = (prod_emiss.sum(axis=0) + prod_partial_detec.sum(axis=0))/1e3
         prod_and_mid_summary.loc[f"Production Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb)[quantity_cols].values
 
         # This will be combined production aerial+partial detection, but ONLY total contributions above each transition point
-        sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + np.array([self.prod_partial_detection_emissions[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+        sum_emiss_aer_comb_abovetp = (sum_emiss_aerial_abovetp + sum_pd_abovetp)/1e3
         prod_and_mid_summary.loc[f"Production Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb_abovetp)[quantity_cols].values
         
         # The total amount of simulated emissions
@@ -798,64 +757,69 @@ class ROAMSModel:
         prod_and_mid_summary.loc[f"Production Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_sim)[quantity_cols].values
 
         # The total amount of simulated emissions below transition point, that end up being coounted in the resulting distribution.
-        sum_emiss_sim_belowtp = np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+        sum_emiss_sim_belowtp = np.array([self.prod_combined_samples[:,n][self.prod_combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
         prod_and_mid_summary.loc[f"Production Simulated Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_sim_belowtp)[quantity_cols].values
         
         # Report from total combined distribution: only "By Itself" (doesn't make sense to 'account for transition point' in combined distribution)
-        sum_emiss_all_comb = (self.combined_samples.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0))/1e3
+        sum_emiss_all_comb = (self.prod_combined_samples.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0))/1e3
         prod_and_mid_summary.loc[f"Production overall Combined Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_all_comb)[quantity_cols].values
 
         # Report the same quantities for the transition point.
         prod_and_mid_summary.loc[f"Production Transition Point ({COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(self.prod_tp)[quantity_cols].values
+        
+        # Get the midstream emissions and partial detection for quantification
+        mid_emiss, mid_partial_detec = self.aerial_samples["midstream"]
         
         # Report the total estimated midstream emissions based on the GHGI estimation, as well as the estimated sub-detection-level estimate
         prod_and_mid_summary.loc[f"Midstream GHGI-based CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromghgi(self.total_ch4_midstream_emissions/1e3)[quantity_cols].values
         prod_and_mid_summary.loc[f"Midstream GHGI-based CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromghgi(self.submdl_ch4_midstream_emissions/1e3)[quantity_cols].values
         
         # Report the sampled aerial midstream emissions distribution, regardless of transition point
-        sum_emiss_aerial = self.midstream_tot_aerial_sample.sum(axis=0)/1e3
+        sum_emiss_aerial = mid_emiss.sum(axis=0)/1e3
         prod_and_mid_summary.loc[f"Midstream Aerial Only Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial)[quantity_cols].values
 
         # Report sampled aerial midstream emissions distributions above transition point
-        sum_emiss_aerial_abovetp = np.array([self.midstream_tot_aerial_sample[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+        sum_emiss_aerial_abovetp = np.array([mid_emiss[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
         prod_and_mid_summary.loc[f"Midstream Aerial Only Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aerial_abovetp)[quantity_cols].values
 
         # Report total partial detection of aerially surveyed midstream infrastructure
-        sum_emiss_partial = self.midstream_partial_detection_emissions.sum(axis=0)/1e3
+        sum_emiss_partial = mid_partial_detec.sum(axis=0)/1e3
         prod_and_mid_summary.loc[f"Midstream Partial Detection Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_partial)[quantity_cols].values
-        sum_emiss_partial_abovetp = np.array([self.midstream_partial_detection_emissions[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+        sum_emiss_partial_abovetp = np.array([mid_partial_detec[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
         prod_and_mid_summary.loc[f"Midstream Partial Detection Total CH4 Emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_partial_abovetp)[quantity_cols].values
         
         # Report combined midstream emissions from aerial sample AND partial detection correction
-        sum_emiss_aer_comb = (self.midstream_tot_aerial_sample.sum(axis=0) + self.midstream_partial_detection_emissions.sum(axis=0))/1e3
+        sum_emiss_aer_comb = (mid_emiss.sum(axis=0) + mid_partial_detec.sum(axis=0))/1e3
         prod_and_mid_summary.loc[f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb)[quantity_cols].values
 
         # This will be combined midstream aerial+partial detection, but ONLY total contributions above each transition point
         sum_emiss_aer_comb_abovetp = sum_emiss_aerial_abovetp + sum_emiss_partial_abovetp
         prod_and_mid_summary.loc[f"Midstream Combined Aerial + Partial Detection Total CH4 emissions (thousand {COMMON_EMISSIONS_UNITS})","Accounting for Transition Point"] = self.mean_and_quantiles_fromsamples(sum_emiss_aer_comb_abovetp)[quantity_cols].values
 
-        # Total emissions across all emissions sizes and asset types
+        # Total emissions across all emissions sizes and production+midstream asset types
         total_emissions = (
             # Production aerial above transition point
-            np.array([self.prod_tot_aerial_sample[:,n][self.prod_tot_aerial_sample[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+            np.array([prod_emiss[:,n][prod_emiss[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
 
             # Production partial detection (only above TP)
-            + self.prod_partial_detection_emissions.sum(axis=0)/1e3
+            + np.array([prod_partial_detec[:,n][prod_emiss[:,n]>=self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
 
             # Contribution of simulated production emissions below TP
-            + np.array([self.combined_samples[:,n][self.combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
+            + np.array([self.prod_combined_samples[:,n][self.prod_combined_samples[:,n]<self.prod_tp[n]].sum() for n in range(len(self.prod_tp))])/1e3
 
             # Midstream aerial above transition point
-            + np.array([self.midstream_tot_aerial_sample[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+            + np.array([mid_emiss[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
 
             # Midstream partial detection (only above TP)
-            + np.array([self.midstream_partial_detection_emissions[:,n][self.midstream_tot_aerial_sample[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
+            + np.array([mid_partial_detec[:,n][mid_emiss[:,n]>=self.cfg.midstream_transition_point].sum() for n in range(self.cfg.n_mc_samples)])/1e3
         )
         # Quantify everything except sub-detection-level midstream emissions
         total_quant = self.mean_and_quantiles_fromsamples(total_emissions)[quantity_cols]
 
-        # Sub-MDL midstream emissions
+        # Add sub-MDL midstream emissions
         total_quant["Avg"] += self.submdl_ch4_midstream_emissions["mid"]/1e3
+        
+        # The CI can't be computed normally because the midstream value is a point estimate.
         total_quant["2.5% CI"] = np.nan
         total_quant["97.5% CI"] = np.nan
         prod_and_mid_summary.loc[f"Total Production + Midstream CH4 Emissions Estimate, All Sources (thousand {COMMON_EMISSIONS_UNITS})","By Itself"] = total_quant.values
@@ -872,9 +836,9 @@ class ROAMSModel:
 
         One column will be "Emissions Value"
         """
-        cumsum_y = self.combined_samples.cumsum(axis=0) + self.prod_partial_detection_emissions.cumsum(axis=0)
+        cumsum_y = self.prod_combined_samples.cumsum(axis=0) + self.prod_partial_detection_emissions.cumsum(axis=0)
         cumsum_y = 100*(1-cumsum_y/cumsum_y.max(axis=0)).mean(axis=1)
-        dist_x = self.combined_samples.mean(axis=1)
+        dist_x = self.prod_combined_samples.mean(axis=1)
 
         dist_summary = pd.DataFrame()
         
@@ -939,10 +903,8 @@ class ROAMSModel:
                 values are the estimates of the corresponding statistic for 
                 given values.
         """
-        lbl = "{}% CI"
-
         output = pd.Series(
-            index=["Avg",*[lbl.format(str(100*q)) for q in self._quantiles]]
+            index=["Avg",*[self._lbl.format(str(100*q)) for q in self._quantiles]]
         )
         output["Avg"] = values.mean()
         quantiles = np.quantile(values,self._quantiles)
@@ -952,7 +914,7 @@ class ROAMSModel:
         for q, val in zip(self._quantiles, quantiles):
             diff = abs(output["Avg"]-val) / denominator
 
-            output[lbl.format(str(100*q))] = (
+            output[self._lbl.format(str(100*q))] = (
                 output["Avg"] - diff 
                 if val<output["Avg"] 
                 else output["Avg"] + diff
@@ -987,12 +949,131 @@ class ROAMSModel:
 
         return output
     
-    def make_mean_production_cumdist_tables(self) -> pd.DataFrame:
+    def make_aerial_characterization(self):
         """
-        Return a summary of the production emissions distributions by taking 
-        the mean over all the monte-carlo iterations of all wells to 
+        Create a table holding the characterization of the sampled and 
+        adjusted aerial data, for each of the provided asset groups.
+
+        This table is ONLY a characterization of aerial data, and makes no 
+        attempt to compare or combine with any other emissions data anywhere 
+        else in the codebase.
+
+        It will have columns of "Distribution" (one of Aerial, Partial 
+        Detection, or Aerial + Partial Detection"), "Quantity" (one of 
+        Fractional Energy Loss, Fractional Volumetric Loss, or Total 
+        Emissions (kgh)), "Quantification" (one of Avg, 
+        2.5% CI, 97.5% CI), "Asset Group" (the keys of 
+        self.aerial_samples), and "value" (the numerical values).
+        """
+        # Instantiate empty dataframe
+        result = pd.DataFrame()
+
+        # Emissions unit into which CH4 emissions should be converted,
+        # for combination with ENERGY_DENSITY_MJKG
+        # E.g. desired_num_unit = "kg/d"
+        desired_num_unit = COMMON_EMISSIONS_UNITS.split("/")[0] + "/d"
+
+        # This is the denominator of fractional energy loss, in MJ/d
+        energy_loss_denominator = (
+            # Bbl oil -> MJ
+            self.cfg.total_covered_oilprod_bbld * MJ_PER_BOE + 
+            
+            # Mcf NG -> MJ
+            self.cfg.total_covered_ngprod_mcfd * energycontent_mj_mcf(self.cfg.gas_composition)
+        )
+        
+        for group, (emiss, pd_corr) in self.aerial_samples.items():
+
+            # Compute total emissions & PD correction for each iteration
+            total_emiss = emiss.sum(axis=0)
+            total_pd = pd_corr.sum(axis=0)
+
+            # Compute the combined total emissions for each iteration
+            total_combined = total_emiss + total_pd
+
+            # Characterize the resulting sample of emissions values (mean and percentiles)
+            emiss_quant = self.mean_and_quantiles_fromsamples(total_emiss)
+            pd_quant = self.mean_and_quantiles_fromsamples(total_pd)
+            combined_quant = self.mean_and_quantiles_fromsamples(total_combined)
+
+            # Define volumetric fractional loss as [mass emitted]/[mass produced]
+            frac_loss_emiss = emiss_quant/self.cfg.ch4_total_covered_production_mass
+            frac_loss_pd = pd_quant/self.cfg.ch4_total_covered_production_mass
+            frac_loss_tot = combined_quant/self.cfg.ch4_total_covered_production_mass
+
+            # Define energy fractional loss
+
+            # Fractional energy loss is defined as, e.g.:
+            # (energy in emitted CH4)/(produced energy)
+            # ([MJ/kg] * [kg/h] * [h/d]) / ([MJ/d])
+            energy_frac_loss_emiss = (
+                ENERGY_DENSITY_MJKG["c1"] 
+                * convert_units(emiss_quant,COMMON_EMISSIONS_UNITS,desired_num_unit)
+                /energy_loss_denominator
+            )
+            energy_frac_loss_pd = (
+                ENERGY_DENSITY_MJKG["c1"] 
+                * convert_units(pd_quant,COMMON_EMISSIONS_UNITS,desired_num_unit)
+                /energy_loss_denominator
+            )
+            energy_frac_loss_tot = (
+                ENERGY_DENSITY_MJKG["c1"] 
+                * convert_units(combined_quant,COMMON_EMISSIONS_UNITS,desired_num_unit)
+                /energy_loss_denominator
+            )
+            
+            group_df = pd.DataFrame(
+                index=pd.MultiIndex.from_product(
+                    [
+                        # Index level 0 = Emissions distribution being characterized
+                        ["Aerial Only","Partial Detection Correction","Aerial + Partial Detection"],
+                        
+                        # Index level 1 = How the distribution is being characterized
+                        [f"Total Emissions ({COMMON_EMISSIONS_UNITS})","Fractional Volumetric Loss (kgCH4 emitted / kgCH4 produced)","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)"],
+
+                        # Index level 2 = Quantification (mean/2.5%/97.5%)
+                        ["Avg",*[self._lbl.format(str(100*q)) for q in self._quantiles]],
+                    ],
+                    names=["Distribution","Quantity","Quantification"]
+                )
+            )
+            group_df.sort_index(inplace=True)
+            
+            # Assign a column "Asset Group" with the asset group name
+            group_df["Asset Group"] = group
+
+            # Assign an empty "value" column to fill out
+            group_df["value"] = np.nan
+
+            for q in emiss_quant.index:
+                # Assign aerial-only characterization
+                group_df.loc[("Aerial Only",f"Total Emissions ({COMMON_EMISSIONS_UNITS})",q),"value"] = emiss_quant.loc[q]
+                group_df.loc[("Aerial Only","Fractional Volumetric Loss (kgCH4 emitted / kgCH4 produced)",q),"value"] = frac_loss_emiss.loc[q]
+                group_df.loc[("Aerial Only","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)",q),"value"] = energy_frac_loss_emiss.loc[q]
+                
+                # Assign partial detection characterization
+                group_df.loc[("Partial Detection Correction",f"Total Emissions ({COMMON_EMISSIONS_UNITS})",q),"value"] = pd_quant.loc[q]
+                group_df.loc[("Partial Detection Correction","Fractional Volumetric Loss (kgCH4 emitted / kgCH4 produced)",q),"value"] = frac_loss_pd.loc[q]
+                group_df.loc[("Partial Detection Correction","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)",q),"value"] = energy_frac_loss_pd.loc[q]
+                
+                # Assign combined distribution characterization
+                group_df.loc[("Aerial + Partial Detection",f"Total Emissions ({COMMON_EMISSIONS_UNITS})",q),"value"] = combined_quant.loc[q]
+                group_df.loc[("Aerial + Partial Detection","Fractional Volumetric Loss (kgCH4 emitted / kgCH4 produced)",q),"value"] = frac_loss_tot.loc[q]
+                group_df.loc[("Aerial + Partial Detection","Fractional Energy Loss (MJ CH4 emitted/MJ oil+gas produced)",q),"value"] = energy_frac_loss_tot.loc[q]
+
+            group_df.reset_index(inplace=True)
+
+            result = pd.concat([result,group_df],axis=0)
+
+        self.table_outputs["Aerial Characterization"] = result
+    
+    def make_mean_production_cumdist_tables(self):
+        """
+        Save a production emissions distributions to `self.table_outputs` by 
+        taking the mean over all the monte-carlo iterations of all wells to 
         simulate. This is reported for (a) aerial emissions, (b) partial 
-        detection emissions, and (c) simulated emissions.
+        detection emissions, (c) simulated emissions, and (d) the 
+        combined production emissions distribution.
 
         Returns:
             pd.DataFrame: 
@@ -1016,16 +1097,30 @@ class ROAMSModel:
         # intervals
         denominator = np.sqrt((self.well_visit_count/self.wells_per_site)/self.cfg.num_wells_to_simulate)
         
-        # Make copies of zero-padded aerial and partial detection emissions.
-        aerial_em = self.prod_tot_aerial_sample.copy()
-        pd_corr = self.prod_partial_detection_emissions.copy()
+        # Get sampled production emissions and partial detection correction
+        prod_emiss, prod_pd = self.aerial_samples["production"]
+
+        # Create zero-padded versions of sampled production emissions and 
+        # partial detection correction
+        aerial_em = np.pad(
+            prod_emiss,
+            ((self.cfg.num_wells_to_simulate-prod_emiss.shape[0],0),(0,0)),
+            mode="constant",
+            constant_values=((0,0),(0,0))
+        )
+        pd_corr = np.pad(
+            prod_pd,
+            ((self.cfg.num_wells_to_simulate-prod_pd.shape[0],0),(0,0)),
+            mode="constant",
+            constant_values=((0,0),(0,0))
+        )
 
         # Find the sorting index of the aerial sample
         sort_aerial = np.argsort(aerial_em,axis=0)
 
         # Sort both partial detection correction and aerial sample together 
         # (they shouldn't need sorting, but just to be safe...)
-        for mc_run in range(self.prod_tot_aerial_sample.shape[1]):
+        for mc_run in range(aerial_em.shape[1]):
             aerial_em[:,mc_run] = aerial_em[sort_aerial[:,mc_run],mc_run]
             pd_corr[:,mc_run] = pd_corr[sort_aerial[:,mc_run],mc_run]
 
@@ -1110,7 +1205,7 @@ class ROAMSModel:
             output[lbl_cum] = output[f"Simulated Only, Mean Cumulative Dist ({COMMON_EMISSIONS_UNITS})"] + diff_cum
             output[lbl_em] = output[f"Mean Simulated Emissions ({COMMON_EMISSIONS_UNITS})"] + diff_em
         
-        overall_dist = self.combined_samples.copy()
+        overall_dist = self.prod_combined_samples.copy()
         overall_cumsum = (
             overall_dist.sum(axis=0) + self.prod_partial_detection_emissions.sum(axis=0) 
             - overall_dist.cumsum(axis=0) - self.prod_partial_detection_emissions.cumsum(axis=0)
@@ -1148,10 +1243,10 @@ class ROAMSModel:
         production, and turn them into plots that include a vertical line 
         to indicate the average transition point.
         """
-        cumsum = self.combined_samples.cumsum(axis=0) + self.prod_partial_detection_emissions.cumsum(axis=0)
+        cumsum = self.prod_combined_samples.cumsum(axis=0) + self.prod_partial_detection_emissions.cumsum(axis=0)
         cumsum_pct = 100*(1-cumsum/cumsum.max(axis=0))
 
-        x = np.nanmean(self.combined_samples,axis=1)
+        x = np.nanmean(self.prod_combined_samples,axis=1)
         y = np.nanmean(cumsum_pct,axis=1)
         
         plt.plot(x,y)

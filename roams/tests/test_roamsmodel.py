@@ -293,11 +293,14 @@ class ROAMSModelTests(TestCase):
         np.random.seed(1)
 
         # Generate the samples
-        aerial_sample, pd_sample = self.model.make_aerial_prod_sample()
+        # (pop other asset groups so ordering of random draws doesn't depend on what's in the groups)
+        self.model.cfg.asset_groups.pop("midstream")
+        aerial_samples = self.model.make_aerial_samples()
+        aerial_sample, pd_sample = aerial_samples["production"]
 
         # Resulting samples should both be [num wells to simulate] x [N MC samples]
-        self.assertEqual(aerial_sample.shape,(10,100))
-        self.assertEqual(pd_sample.shape,(10,100))
+        self.assertEqual(aerial_sample.shape,(2,100))
+        self.assertEqual(pd_sample.shape,(2,100))
 
         # Assert the partial detection emissions are exactly equal to 
         # the sampled emissions (what you get when PoD=.5 everywhere where 
@@ -342,7 +345,10 @@ class ROAMSModelTests(TestCase):
         np.random.seed(1)
 
         # Generate the samples
-        aerial_sample, pd_sample = self.model.make_aerial_midstream_sample()
+        # (pop other asset groups so ordering of random draws doesn't depend on what's in the groups)
+        self.model.cfg.asset_groups.pop("production")
+        aerial_samples = self.model.make_aerial_samples()
+        aerial_sample, pd_sample = aerial_samples["midstream"]
 
         # Resulting samples should both be [2] x [N MC samples]
         # (for midstream, there's no associated infrastructure to simulated
@@ -376,13 +382,19 @@ class ROAMSModelTests(TestCase):
 
         # Make the up the samples: pretend like the two aerial plumes
         # got sampled in each MC run
-        self.model.prod_tot_aerial_sample = np.zeros((1000,100))
-        self.model.prod_tot_aerial_sample[-2,:] = 35
-        self.model.prod_tot_aerial_sample[-1,:] = 48
+        
+        # 0th entry is the emissions
+        emiss = np.zeros((1000,100))
+        emiss[-2,:] = 35
+        emiss[-1,:] = 48
 
-        self.model.prod_partial_detection_emissions = np.zeros((1000,100))
-        self.model.prod_partial_detection_emissions[-2,:] = 35
-        self.model.prod_partial_detection_emissions[-1,:] = 48
+        # 1st entry is partial detection correction
+        pd_corr = np.zeros((1000,100))
+        pd_corr[-2,:] = 35
+        pd_corr[-1,:] = 48
+
+        self.model.aerial_samples = dict()
+        self.model.aerial_samples["production"] = (emiss,pd_corr)
         
         # Make up a simulated sample, where for each MC run it's [1,2,3,4,5]
         # repeated
@@ -411,13 +423,19 @@ class ROAMSModelTests(TestCase):
         
         # Make the up the samples: pretend like the two aerial plumes
         # got sampled in each MC run
-        self.model.prod_tot_aerial_sample = np.zeros((1000,100))
-        self.model.prod_tot_aerial_sample[-2,:] = 35
-        self.model.prod_tot_aerial_sample[-1,:] = 48
+        
+        # 0th entry is the emissions
+        emiss = np.zeros((1000,100))
+        emiss[-2,:] = 35
+        emiss[-1,:] = 48
 
-        self.model.prod_partial_detection_emissions = np.zeros((1000,100))
-        self.model.prod_partial_detection_emissions[-2,:] = 35
-        self.model.prod_partial_detection_emissions[-1,:] = 48
+        # 1st entry is partial detection correction
+        pd_corr = np.zeros((1000,100))
+        pd_corr[-2,:] = 35
+        pd_corr[-1,:] = 48
+
+        self.model.aerial_samples = dict()
+        self.model.aerial_samples["production"] = (emiss,pd_corr)
         
         np.random.seed(1)
         self.model.simulated_sample = np.random.choice(
@@ -430,7 +448,7 @@ class ROAMSModelTests(TestCase):
         # Assert that, based on the seed, the resulting combined sample 
         # results in a very specific mean emissions (sans partial detection).
         self.assertEqual(
-            self.model.combined_samples.sum(axis=0).mean(),
+            self.model.prod_combined_samples.sum(axis=0).mean(),
             7567.55
         )
 
@@ -449,7 +467,7 @@ class ROAMSModelTests(TestCase):
             (   
                 (self.model.prod_partial_detection_emissions[pd_over0])
                 ==
-                (self.model.combined_samples[pd_over0])
+                (self.model.prod_combined_samples[pd_over0])
             ).all()
         )
 
@@ -467,13 +485,19 @@ class ROAMSModelTests(TestCase):
 
         # Make the up the samples: pretend like the two aerial plumes
         # got sampled in each MC run
-        self.model.prod_tot_aerial_sample = np.zeros((1000,100))
-        self.model.prod_tot_aerial_sample[-2,:] = 35
-        self.model.prod_tot_aerial_sample[-1,:] = 48
 
-        self.model.prod_partial_detection_emissions = np.zeros((1000,100))
-        self.model.prod_partial_detection_emissions[-2,:] = 35
-        self.model.prod_partial_detection_emissions[-1,:] = 48
+        # 0th entry is the emissions
+        emiss = np.zeros((1000,100))
+        emiss[-2,:] = 35
+        emiss[-1,:] = 48
+
+        # 1st entry is partial detection correction
+        pd_corr = np.zeros((1000,100))
+        pd_corr[-2,:] = 35
+        pd_corr[-1,:] = 48
+
+        self.model.aerial_samples = dict()
+        self.model.aerial_samples["production"] = (emiss,pd_corr)
         
         np.random.seed(1)
         self.model.simulated_sample = np.random.choice(
@@ -483,7 +507,7 @@ class ROAMSModelTests(TestCase):
         self.model.combine_prod_samples()
 
         self.assertEqual(
-            self.model.combined_samples.sum(axis=0).mean(),
+            self.model.prod_combined_samples.sum(axis=0).mean(),
             3079.51
         )
 
