@@ -67,7 +67,7 @@ TEST_CONFIG = {
     "n_mc_samples" : 100,
     "prod_transition_point" : 10,
     "partial_detection_correction" : True,
-    "simulate_error" : False,
+    "noise_fn" : None,
     "PoD_fn" : "bin",
     "correction_fn" : "power_correction",
     "midstream_transition_point" : 1000,
@@ -165,7 +165,7 @@ class ROAMSModelTests(TestCase):
         self.model.cfg.correction_fn = None
         
         # Don't simulate error and apply noise
-        self.model.cfg.simulate_error = False
+        self.model.cfg.noise_fn = None
         
         # Don't do anything to the negative values, just return it all
         self.model.cfg.handle_negative = lambda em: em
@@ -198,7 +198,7 @@ class ROAMSModelTests(TestCase):
         self.model.cfg.correction_fn = None
         
         # Don't simulate error and apply noise
-        self.model.cfg.simulate_error = False
+        self.model.cfg.noise_fn = None
         
         # Don't do anything to the negative values, just return it all
         self.model.cfg.handle_negative = lambda em: em
@@ -210,8 +210,6 @@ class ROAMSModelTests(TestCase):
 
         # "noise" function is just multiplying by 2.
         self.model.cfg.noise_fn = lambda em: em*2
-        # Simulate error using this noise_fn
-        self.model.cfg.simulate_error = True
         np.random.seed(1)
         em_2x, windnorm_2x = self.model.get_aerial_survey_sample()
 
@@ -235,7 +233,7 @@ class ROAMSModelTests(TestCase):
         self.model.cfg.correction_fn = None
         
         # Don't simulate error and apply noise
-        self.model.cfg.simulate_error = False
+        self.model.cfg.noise_fn = None
         
         # Don't do anything to the negative values, just return it all
         self.model.cfg.handle_negative = lambda em : em
@@ -249,7 +247,6 @@ class ROAMSModelTests(TestCase):
         self.model.cfg.handle_negative = zero_out
         
         # Use a noise function that turns all values negative
-        self.model.cfg.simulate_error = True
         self.model.cfg.noise_fn = lambda em : -1*em
         np.random.seed(1)
         em_0, windnorm_0 = self.model.get_aerial_survey_sample()
@@ -283,10 +280,10 @@ class ROAMSModelTests(TestCase):
             * Wind-normalized emissions 8
         """
         self.model.cfg.correction_fn = None         # No correction function: don't adjust the sampled emissions
-        self.model.cfg.simulate_error = False       # Don't add random noise
+        self.model.cfg.noise_fn = None              # Don't add random noise
         self.model.cfg.partial_detection_correction = True  # Tell it to add partial detection
         self.model.cfg.PoD_fn = _half_pod           # Use PoD where pos emissions get P = .5 -> add 1x emissions
-        self.model.cfg.n_mc_samples = 100          # Use 1000 MC samples
+        self.model.cfg.n_mc_samples = 100           # Use 100 MC samples
         self.model.cfg.num_wells_to_simulate = 10   # Simulate 10 wells only
 
         # Set a seed to control what the expected random behavior is
@@ -335,10 +332,10 @@ class ROAMSModelTests(TestCase):
             * Wind-normalized emissions 11
         """
         self.model.cfg.correction_fn = None         # No correction function: don't adjust the sampled emissions
-        self.model.cfg.simulate_error = False       # Don't add random noise
+        self.model.cfg.noise_fn = None              # Don't add random noise
         self.model.cfg.partial_detection_correction = True  # Tell it to add partial detection
         self.model.cfg.PoD_fn = _half_pod           # Use PoD where >0 emissions -> P = .5
-        self.model.cfg.n_mc_samples = 100          # Use 1000 MC samples
+        self.model.cfg.n_mc_samples = 100           # Use 100 MC samples
         self.model.cfg.num_wells_to_simulate = 10   # Simulate 10 wells only
 
         # Set a seed to control what the expected random behavior is

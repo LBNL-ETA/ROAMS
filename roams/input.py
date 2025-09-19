@@ -89,11 +89,10 @@ _DEFAULT_CONFIGS = {
     "n_mc_samples" : 100,
     "prod_transition_point" : None,
     "partial_detection_correction" : True,
-    "simulate_error" : True,
     "handle_negative" : "zero_out",
     "PoD_fn" : "bin",
     "correction_fn" : "power_correction",
-    "noise_fn" : "normal",
+    "noise_fn" : None,
     
     # Output specification defaults. 
     # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
@@ -324,6 +323,21 @@ class ROAMSConfig:
                 "'production'."
             )
         
+        if isinstance(config["noise_fn"],dict) and "name" not in config["noise_fn"].keys():
+            raise KeyError(
+                "The 'noise_fn' argument needs to be either `None` (in which "
+                "case no noise will be applied to sampled aerial emissions) "
+                "or a dictionary with at least a 'name' key. See the README "
+                "for more details."
+            )
+        elif (not isinstance(config["noise_fn"],dict)) and (config["noise_fn"] is not None):
+            raise ValueError(
+                "The `noise_fn` argument can only either be `None` (in which "
+                "case no noise will be applied to sampled aerial emissions), "
+                " or a dictionary that specifies a method of numpy.random to use. "
+                "See the README for more details."
+            )
+        
         self._config = config.copy()
         
         # Do some after-the-fact assignment with specific behaviors   
@@ -432,8 +446,16 @@ class ROAMSConfig:
             self.correction_fn = getattr(roams.aerial.assumptions,self.correction_fn)
         
         # Look up the error-simulating noise function
-        if isinstance(self.noise_fn,str):
-            self.noise_fn = getattr(roams.aerial.assumptions,self.noise_fn)
+        if isinstance(self.noise_fn,dict):
+            # E.g. name = "normal"
+            name = self.noise_fn.pop("name")
+            
+            # E.g. fn = np.random.normal
+            fn = getattr(np.random,name)
+
+            # E.g. self.noise_fn = lambda emissions: np.random.normal(loc=1.0,scale=1.0,size=emissions.shape) * emissions
+            # (i.e. take random noise the same shape as emissions, and multiply element-wise with emissions)
+            self.noise_fn = lambda emissions: fn(**self.noise_fn,size=emissions.shape) * emissions
         
         # Look up the handle-negative-emissions function
         if isinstance(self.handle_negative,str):

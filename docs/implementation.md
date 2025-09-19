@@ -163,13 +163,10 @@ graph LR;
 
 ### make_samples
 
-The goal of this method is to establish samples of the simulated production emissions, aerially measured production emissions, and aerially measured midstream emissions. By the end of this method, the following attributes should be defined:
+The goal of this method is to establish samples of the simulated production emissions, and aerially measured emissions (at least for specified production and midstream infrastructure in the `asset_groups` argument, but also whatever other asset groups are specified there). By the end of this method, the following attributes should be defined:
 
 * `simulated_sample`: A `np.ndarray`  whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with (column-wise) sorted ascending values of simulated emissions values in `COMMON_EMISSIONS_UNITS`, which may or may not have been re-sampled with stratification.
-* `prod_tot_aerial_sample`: A `np.ndarray` whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with mostly 0s, in all likelihood, with (column-wise) sorted ascending aerially measured, sampled, and adjusted emissions values in `COMMON_EMISSIONS_UNITS`.
-* `prod_partial_detection_emissions`: A `np.ndarray` whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Each value in this table is the partial detection correction for corresponding values in `prod_tot_aerial_sample` (e.g. the value in the 10th row and 9th column is the partial detection correction for the emissions value at the 10th row and 9th column of `prod_tot_aerial_sample`).
-* `midstream_tot_aerial_sample`: A `np.ndarray` whose shape is [number of measured midstream sources] x [number of monte-carlo iterations]. Should represent a sample of adjusted and perhaps noised emissions from midstream infrastructure, without any padding zeros to represent infrastructure surveyed but not emitting.
-* `midstream_partial_detection_emissions`: A `np.ndarray` whose shape is [number of measured midstream sources] x [number of monte-carlo iterations]. Each value in this table is the partial detection correction for corresponding values in `midstream_tot_aerial_sample` (e.g. the value in the 10th row and 9th column is the partial detection correction for the emissions value at the 10th row and 9th column of `midstream_tot_aerial_sample`).
+* `aerial_samples`: A dictionary of of {string : tuple} pairs. Each string key is a `lower()`-ed asset group name provided in the input file (`"asset_groups"`, see README), of which there should always be `"production"` and `"midstream"`, but you may specify more. The tuple values are a pair of (sampled adjusted and noised emissions , partial detection correction). Each of those values is an array of size [number of emitting sources] x [number of monte carlo iterations]. The partial detection corrections correspond elementwise to emissions in the same tuple pair. These samples represent the results of the aerial sampling and adjustment procedure for each asset group specified in your input file.
 
 ### combined_prod_samples
 
@@ -186,7 +183,7 @@ In order to combine the simulated and aerially sampled emissions distributions i
 
 The result of this method is the definition of two new attributes:
 
-* `combined_samples`: A `np.ndarray` whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with (column-wise) sorted ascending values of emissions in `COMMON_EMISSIONS_UNITS`, representing the estimated emissions of some well in the study region.
+* `prod_combined_samples`: A `np.ndarray` whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with (column-wise) sorted ascending values of emissions in `COMMON_EMISSIONS_UNITS`, representing the estimated emissions of some well in the study region.
 * `prod_partial_detection_emissions`: A `np.ndarray`  whose shape is [number of wells to simulate] x [number of monte-carlo iterations].  Each value in this table is the partial detection correction for corresponding values in `combined_samples` (e.g. the value in the 10th row and 9th column is the partial detection correction for the emissions value at the 10th row and 9th column of `combined_samples`).
 
 ### compute_simulated_midstream_emissions

@@ -41,30 +41,3 @@ def zero_out(emissions : np.ndarray) -> np.ndarray:
     emissions[emissions<0] = 0
     return emissions
 
-def normal(emissions: np.ndarray) -> np.ndarray:
-    """
-    Use a pre-determined normal distribution to apply noise to the 
-    given aerial emissions table, and return the result of:
-
-    emissions * noise
-
-    This is intended to help quantify error in the resulting samples.
-
-    Args:
-        emissions (np.ndarray): 
-            A sample of aerially observed emissions data. Should have 
-            a number of rows equal to the number of sources included, and 
-            a number of columns equal to the number of monte-carlo iterations.
-
-    Returns:
-        np.ndarray: 
-            An array of the same shape as the input table, but to which 
-            normal noise has been applied.
-    """    
-    error = np.random.normal(1+0.07, 0.4,size=emissions.shape)
-
-    # Simulate error by "spreading out" the emissions values with normal distribution (this is optional)
-    emissions = emissions * error
-    
-    return emissions
-

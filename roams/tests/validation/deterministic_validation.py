@@ -67,7 +67,7 @@ INPUT = {
     "prod_transition_point" : None,
     "midstream_transition_point" : 40, 
     "partial_detection_correction" : True,
-    "simulate_error" : False, # False b/c we don't want this added noise
+    "noise_fn" : None, # None b/c we don't want this added noise
     "foldername" : "_deterministic_validation_exercise",
     "save_mean_dist" : False,
     "loglevel" : logging.WARNING,

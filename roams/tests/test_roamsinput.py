@@ -59,7 +59,7 @@ TEST_CONFIG = {
     "n_mc_samples" : 100,
     "prod_transition_point" : None,
     "partial_detection_correction" : True,
-    "simulate_error" : True,
+    "noise_fn": {"name":"normal","loc":1.0,"scale":1.0},
     "PoD_fn" : "bin",
     "correction_fn" : "power_correction",
     "midstream_transition_point" : 1000,
@@ -89,13 +89,15 @@ class ROAMSInputTests(TestCase):
         """
         Assert that the TEST_CONFIG can be loaded as a dictionary.
         """
-        c = ROAMSConfig(TEST_CONFIG)
+        config = deepcopy(TEST_CONFIG)
+        c = ROAMSConfig(config)
     
     def test_loadsconfigfile(self):
         """
         Assert that the TEST_CONFIG can be loaded normally when given as a file.
         """
-        self._saveConfig(TEST_CONFIG)
+        config = deepcopy(TEST_CONFIG)
+        self._saveConfig(config)
         c = ROAMSConfig(FAKE_INPUT_FILE)
 
     def test_missing_inputfailure(self):
@@ -233,6 +235,29 @@ class ROAMSInputTests(TestCase):
         with self.assertRaises(ValueError):
             c = ROAMSConfig(newconfig)
     
+    def test_incorrect_noisefn(self):
+        """
+        Assert that when the aerial asset types are incorrectly specified, 
+        the appropriate errors will be raised.
+        """
+        # The prior specification of a string is no longer valid, yields ValueError
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["noise_fn"] = "normal"
+        with self.assertRaises(ValueError):
+            c = ROAMSConfig(newconfig)
+        
+        # A method name that doesn't exist in numpy.random is an AttributeError
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["noise_fn"] = {"name":"fake"}
+        with self.assertRaises(AttributeError):
+            c = ROAMSConfig(newconfig)
+        
+        # When no "name" is in the dictionary, there's a KeyError
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["noise_fn"] = {"loc":1.0,"scale":1.0}
+        with self.assertRaises(KeyError):
+            c = ROAMSConfig(newconfig)
+    
 if __name__=="__main__":
     import unittest
-    unittest.main()
+    unittest.main(defaultTest="ROAMSInputTests.test_loadsconfigdict")
