@@ -953,6 +953,17 @@ class ROAMSModel:
         """
         Create a table holding the characterization of the sampled and 
         adjusted aerial data, for each of the provided asset groups.
+
+        This table is ONLY a characterization of aerial data, and makes no 
+        attempt to compare or combine with any other emissions data anywhere 
+        else in the codebase.
+
+        It will have columns of "Distribution" (one of Aerial, Partial 
+        Detection, or Aerial + Partial Detection"), "Quantity" (one of 
+        Fractional Energy Loss, Fractional Volumetric Loss, or Total 
+        Emissions (kgh)), "Quantification" (one of Avg, 
+        2.5% CI, 97.5% CI), "Asset Group" (the keys of 
+        self.aerial_samples), and "value" (the numerical values).
         """
         # Instantiate empty dataframe
         result = pd.DataFrame()
