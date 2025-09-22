@@ -1,6 +1,7 @@
 from datetime import datetime
-import logging
 from collections.abc import Iterable, Callable
+from copy import deepcopy
+import logging
 
 import yaml
 import numpy as np
@@ -46,9 +47,9 @@ _REQUIRED_CONFIGS = {
     # Midstream required GHGI inputs
     "state_ghgi_file" : str,
     "ghgi_co2eq_unit" : str,
-    "enverus_state_production_file" : str,
-    "enverus_natnl_production_file" : str,
-    "enverus_prod_unit" : str,
+    "production_state_est_file" : str,
+    "production_natnl_est_file" : str,
+    "production_est_unit" : str,
     "ghgi_ch4emissions_ngprod_file" : str,
     "ghgi_ch4emissions_ngprod_uncertainty_file" : str,
     "ghgi_ch4emissions_petprod_file" : str,
@@ -91,7 +92,7 @@ _DEFAULT_CONFIGS = {
     "partial_detection_correction" : True,
     "handle_negative" : "zero_out",
     "PoD_fn" : "bin",
-    "correction_fn" : "power_correction",
+    "correction_fn" : None,
     "noise_fn" : {"name":"normal","loc":1.07,"scale":0.4},
     
     # Output specification defaults. 
@@ -158,7 +159,7 @@ class ROAMSConfig:
         Args:
             config_dict (str | dict): 
                 Either path to the specification JSON file, or a parsed 
-                coming from such a file.
+                dictionary coming from such a file.
 
             _req (dict, optional):
                 A dictionary of lists, where in each list are tuples of 
@@ -213,6 +214,14 @@ class ROAMSConfig:
             with open(config,"r") as f:
                 # Load content which may include non-JSON-safe windows paths ("C:\path\to\file.csv")
                 config = yaml.safe_load(f)
+
+        elif isinstance(config,dict):
+            config = deepcopy(config)
+
+        else:
+            raise TypeError(
+                f"`config` can only be passed as a dictionary or json file"
+            )
         
         # Apply global random seed ASAP
         # This is important for any input classes that require resampling or 
@@ -243,7 +252,9 @@ class ROAMSConfig:
                 log.info(
                     f"{k} not provided as an argument. Will set it to {v}."
                 )
-                config[k] = v
+                # Copy the value so that application of default behavior after 
+                # this can't alter the value in _DEFAULT_CONFIGS
+                config[k] = deepcopy(v)
 
         # By this point all the keys in _req and _def are in `config`. We 
         # assign them all as attributes
@@ -338,7 +349,10 @@ class ROAMSConfig:
                 "See the README for more details."
             )
         
-        self._config = config.copy()
+        # self._config is a record of the read & default-filled input, before 
+        # additional default behavior (e.g. turning method specification into 
+        # actual methods).
+        self._config = deepcopy(config)
         
         # Do some after-the-fact assignment with specific behaviors   
         self.default_input_behavior()
@@ -388,8 +402,8 @@ class ROAMSConfig:
 
         self.midstreamGHGIData = midstreamGHGHIDataClass(
             self.state_ghgi_file,
-            self.enverus_state_production_file,
-            self.enverus_natnl_production_file,
+            self.production_state_est_file,
+            self.production_natnl_est_file,
             self.ghgi_ch4emissions_ngprod_file,
             self.ghgi_ch4emissions_ngprod_uncertainty_file,
             self.ghgi_ch4emissions_petprod_file,
@@ -399,7 +413,7 @@ class ROAMSConfig:
             frac_aerial_midstream_emissions=self.frac_aerial_midstream_emissions,
             ghgi_co2eq_unit=self.ghgi_co2eq_unit,
             ghgi_ch4emissions_unit=self.ghgi_ch4emissions_unit,
-            enverus_prod_unit=self.enverus_prod_unit,
+            production_est_unit=self.production_est_unit,
             loglevel=self.loglevel,
         )
 
@@ -448,7 +462,10 @@ class ROAMSConfig:
         # Look up the error-simulating noise function
         if isinstance(self.noise_fn,dict):
             # E.g. name = "normal"
-            name = self.noise_fn.pop("name")
+            name = self.noise_fn["name"]
+            
+            # E.g. kwargs = {"loc":1.07,"scale":0.4}
+            kwargs = {k:v for k,v in self.noise_fn.items() if k!="name"}
             
             # E.g. fn = np.random.normal
             fn = getattr(np.random,name)
@@ -460,7 +477,7 @@ class ROAMSConfig:
             )
             # E.g. self.noise_fn = lambda emissions: np.random.normal(loc=1.0,scale=1.0,size=emissions.shape) * emissions
             # (i.e. take random noise the same shape as emissions, and multiply element-wise with emissions)
-            self.noise_fn = lambda emissions: fn(**self.noise_fn,size=emissions.shape) * emissions
+            self.noise_fn = lambda emissions: fn(**kwargs,size=emissions.shape) * emissions
         
         # Look up the handle-negative-emissions function
         if isinstance(self.handle_negative,str):
@@ -482,16 +499,7 @@ class ROAMSConfig:
                 The key: value pairs resulting from the reading of the given 
                 config file.
         """
-        result = self._config.copy()
-        for config, value in self._config.items():
-            value = getattr(self,config)
-            
-            # Keep all configs as-is, except for functions. Take only their 
-            # names, like was specified in the input file.
-            if isinstance(value,Callable):
-                result[config] = value.__name__
-
-        return result
+        return deepcopy(self._config)
     
     @property
     def ch4_total_covered_production_mass(self) -> float:

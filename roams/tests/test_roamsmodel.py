@@ -52,9 +52,9 @@ TEST_CONFIG = {
     "wells_per_site" : 3.14159,
     "state_ghgi_file" : STATE_GHGI_FILENAME,
     "ghgi_co2eq_unit" : "MMT/yr",
-    "enverus_state_production_file" : STATE_PROD_FILENAME,
-    "enverus_natnl_production_file" : NATNL_PROD_FILENAME,
-    "enverus_prod_unit" : "mscf/yr",
+    "production_state_est_file" : STATE_PROD_FILENAME,
+    "production_natnl_est_file" : NATNL_PROD_FILENAME,
+    "production_est_unit" : "mscf/yr",
     "ghgi_ch4emissions_ngprod_file" : NATNL_NGPROD_GHGI_FILENAME,
     "ghgi_ch4emissions_ngprod_uncertainty_file" : NATNL_NGPROD_UNCERT_GHGI_FILENAME,
     "ghgi_ch4emissions_petprod_file" : NATNL_PETPROD_GHGI_FILENAME,
@@ -533,9 +533,9 @@ class ROAMSModelTests(TestCase):
             # Load content which may include non-JSON-safe windows paths ("C:\path\to\file.csv")
             config = yaml.safe_load(f)
 
-        # Assert the loaded config is the same as that used for the test
-        self.assertEqual(config,TEST_CONFIG)
+        # Assert the loaded config is the same as that used for the test, after applying default behavior.
+        self.assertEqual(config,self.model.cfg._config)
     
 if __name__=="__main__":
     import unittest
-    unittest.main()
+    unittest.main(defaultTest="ROAMSModelTests.test_saves_config")

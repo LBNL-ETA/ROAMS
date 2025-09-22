@@ -18,7 +18,7 @@ NATNL_PETPROD_GHGI_FILENAME = os.path.join(TEST_DIR,"_natl_petprodch4.csv")
 
 STATE_GHGI = pd.DataFrame({"GHGI Gas":["Methane","Carbon Dioxide"],"1900":[.30,.10],"1901":[.31,.11]})
 STATE_PROD = pd.DataFrame({"GHGI State":["State1","State2"],"1900":[2*1e6,5*1e6],"1901":[2*1e6,5*1e6]})
-NATNL_PROD = pd.DataFrame({"Oil":[2*1e9,5*1e9],"Gas":[2*1e9,5*1e9],"Enverus production month":["August 1, 1900","August 1, 1901"]})
+NATNL_PROD = pd.DataFrame({"Oil":[2*1e9,5*1e9],"Gas":[2*1e9,5*1e9],"production month":["August 1, 1900","August 1, 1901"]})
 NATNL_NGPROD_GHGI = pd.DataFrame(
     [
         # Omitting rows that may otherwise be included, but aren't called 

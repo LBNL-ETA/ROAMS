@@ -44,9 +44,9 @@ TEST_CONFIG = {
     "wells_per_site" : 3.14159,
     "state_ghgi_file" : STATE_GHGI_FILENAME,
     "ghgi_co2eq_unit" : "MMT/yr",
-    "enverus_state_production_file" : STATE_PROD_FILENAME,
-    "enverus_natnl_production_file" : NATNL_PROD_FILENAME,
-    "enverus_prod_unit" : "mscf/yr",
+    "production_state_est_file" : STATE_PROD_FILENAME,
+    "production_natnl_est_file" : NATNL_PROD_FILENAME,
+    "production_est_unit" : "mscf/yr",
     "ghgi_ch4emissions_ngprod_file" : NATNL_NGPROD_GHGI_FILENAME,
     "ghgi_ch4emissions_ngprod_uncertainty_file" : NATNL_NGPROD_UNCERT_GHGI_FILENAME,
     "ghgi_ch4emissions_petprod_file" : NATNL_PETPROD_GHGI_FILENAME,
@@ -89,14 +89,13 @@ class ROAMSInputTests(TestCase):
         """
         Assert that the TEST_CONFIG can be loaded as a dictionary.
         """
-        config = deepcopy(TEST_CONFIG)
-        c = ROAMSConfig(config)
+        c = ROAMSConfig(TEST_CONFIG)
     
     def test_loadsconfigfile(self):
         """
         Assert that the TEST_CONFIG can be loaded normally when given as a file.
         """
-        config = deepcopy(TEST_CONFIG)
+        config = TEST_CONFIG
         self._saveConfig(config)
         c = ROAMSConfig(FAKE_INPUT_FILE)
 
@@ -122,9 +121,9 @@ class ROAMSInputTests(TestCase):
             "total_covered_oilprod_bbld",
             "state_ghgi_file",
             "ghgi_co2eq_unit",
-            "enverus_state_production_file",
-            "enverus_natnl_production_file",
-            "enverus_prod_unit",
+            "production_state_est_file",
+            "production_natnl_est_file",
+            "production_est_unit",
             "ghgi_ch4emissions_ngprod_file",
             "ghgi_ch4emissions_ngprod_uncertainty_file",
             "ghgi_ch4emissions_petprod_file",
@@ -144,6 +143,9 @@ class ROAMSInputTests(TestCase):
         Assert that when required inputs are the wrong type, a ValueError 
         is raised.
         """
+        with self.assertRaises(TypeError):
+            c = ROAMSConfig(None)
+
         for key in (
             "sim_em_file",
             "sim_em_col",
@@ -162,9 +164,9 @@ class ROAMSInputTests(TestCase):
             "total_covered_oilprod_bbld",
             "state_ghgi_file",
             "ghgi_co2eq_unit",
-            "enverus_state_production_file",
-            "enverus_natnl_production_file",
-            "enverus_prod_unit",
+            "production_state_est_file",
+            "production_natnl_est_file",
+            "production_est_unit",
             "ghgi_ch4emissions_ngprod_file",
             "ghgi_ch4emissions_ngprod_uncertainty_file",
             "ghgi_ch4emissions_petprod_file",
@@ -260,4 +262,4 @@ class ROAMSInputTests(TestCase):
     
 if __name__=="__main__":
     import unittest
-    unittest.main(defaultTest="ROAMSInputTests.test_loadsconfigdict")
+    unittest.main()

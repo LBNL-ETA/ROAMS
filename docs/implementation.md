@@ -70,7 +70,7 @@ The input class for parsing aerial survey input data is `roams.aerial.input.Aeri
 
 It's expected that the aerial data is provided in two parts as csvs: plume data and source data. While plume data holds the information about plume size (and what sources they're coming from), the source data classifies the source types and number of fly-overs. The column names, and units thereof where necessary, are always expected to be provided.
 
-When first instantiated, the `AerialSurveyData` class will assert that the prescribed columns exist, and that there's sufficient information to collect or infer emissions and wind-normalized emissions (via the relation `emissions [mass/time] = wind-normalized emissions [mass/time / speed] * windspeed [speed]`, if necessary). It will also segregate the dataset into different `asset_group`s, which are subsets of the source and plume data corresponding to specific prescribed source asset types. The subsets of the input data corresponding to each asset group are used in providing data to the ROAMSModel class. While the `AerialSurveyData` class doesn't have an opinion about what asset groups are specified, the `ROAMSConfig` will require that "production" and "midstream" are given - the `ROAMSModel` will require those.
+When first instantiated, the `AerialSurveyData` class will assert that the prescribed columns exist, and that there's sufficient information to collect or infer emissions and wind-normalized emissions (via the relation `emissions [mass/time] = wind-normalized emissions [mass/time / speed] * windspeed [speed]`, if necessary). It will also segregate the dataset into different `asset_groups`, which are subsets of the source and plume data corresponding to specific prescribed source asset types. The subsets of the input data corresponding to each asset group are used in providing data to the ROAMSModel class. While the `AerialSurveyData` class doesn't have an opinion about what asset groups are specified, the `ROAMSConfig` will require that "production" and "midstream" are given - the `ROAMSModel` will require those.
 
 The class provides several properties as entry points to the `ROAMSModel` class:
 
@@ -97,13 +97,13 @@ For more detail on unit handling, see the [unit handling section](#unit-handling
 [go back to input layer](#input-layer-and-behavior)
 The input class for parsing covered production data is `roams.production.input.CoveredProductionDistData`.
 
-This class expects that the covered production distribution data is passed as a csv file with a single column, whose name and physical units are specified. It's intended that this is a long list of values that embodies a distribution reflective of per-well production in the study region. It also requires passing a `gas_composition`, which is used to convert between natural gas and CH4.
+This class expects that the covered production distribution data is passed as a csv file with a single column, whose name and physical units are specified. It's intended that this is a long list of values that embodies a distribution reflective of per-well production in the study region. It also requires passing a `gas_composition`, which is used to convert between natural gas and CH<sub>4</sub>.
 
 The class provides three main properties that serve as entrypoints for the `ROAMSModel` to access the underlying data:
 
 * `ng_production_dist_volumetric`: A `np.ndarray` containing the rate of volumetric production of natural gas for this representative collection of wells, in `COMMON_PRODUCTION_UNITS`. Will be in the same order as the input data.
-* `ch4_production_dist_volumetric`: A `np.ndarray` containing the rate of volumetric production of CH4 for this representative collection of wells, in `COMMON_PRODUCTION_UNITS`. It uses the gas composition to make this conversion. Will be in the same order as the input data.
-* `ch4_production_dist_mass`: A `np.ndarray` containing the rate of mass production of CH4 for this representative collection of wells, in `COMMON_EMISSIONS_UNITS`. It uses the gas composition and a fixed density assumption to compute this quantity. It will be in the same order as the input data.
+* `ch4_production_dist_volumetric`: A `np.ndarray` containing the rate of volumetric production of CH<sub>4</sub> for this representative collection of wells, in `COMMON_PRODUCTION_UNITS`. It uses the gas composition to make this conversion. Will be in the same order as the input data.
+* `ch4_production_dist_mass`: A `np.ndarray` containing the rate of mass production of CH<sub>4</sub> for this representative collection of wells, in `COMMON_EMISSIONS_UNITS`. It uses the gas composition and a fixed density assumption to compute this quantity. It will be in the same order as the input data.
 
 For more detail on unit handling, see the [unit handling section](#unit-handling).
 
@@ -116,8 +116,10 @@ This class takes a lot of distinct tables as inputs. It requires state & nationa
 This particular input class has very specific opinions about how the data are formatted. You should look at the dummy data to ensure that your inputs are in the same form if you're experiencing problems.
 
 The class provides two main properties to serve as entrypoints for the `ROAMSModel` to access the underlying data:
-* `total_midstream_ch4_loss_rate` : The total rate of CH4 loss, expressed as a dimensionless and unitless ratio of `[CH4 emitted from midstream infrastructure]/[Total CH4 produced]`. It is the lesser of a state-level and national-level estimate. It will be a `pd.Series` with indices of `'low', 'mid', 'high'`. While the `'mid'` value is the computed estimate, the `'low'` and `'high'` values are estimated 95% confidence interval bounds inferred by reading and using very specific data from an input table.
+* `total_midstream_ch4_loss_rate` : The total rate of CH<sub>4</sub> loss, expressed as a dimensionless and unitless ratio of `[CH4 emitted from midstream infrastructure]/[Total CH4 produced]`. It is the lesser of a state-level and national-level estimate. It will be a `pd.Series` with indices of `'low', 'mid', 'high'`. While the `'mid'` value is the computed estimate, the `'low'` and `'high'` values are estimated 95% confidence interval bounds inferred by reading and using very specific data from an input table (see below).
 * `submdl_midstream_ch4_loss_rate` : A fraction of `total_midstream_ch4_loss_rate`, representing only the portion that is presumably not aerially observable. It will be a `pd.Series` with indices of `'low', 'mid', 'high'`. While the `'mid'` value is the computed estimate, the `'low'` and `'high'` values are estimated 95% confidence interval bounds inferred by reading and using very specific data from an input table.
+
+With each point estimate, the 95% confidence interval is inferred by using the the 95% confidence interval for CH<sub>4</sub> and non-combustion CO2 emissions from natural gas systems (Supplementary table 3-74 in GHGI 2022), specifically the lower- and upper-bounds given as percentage changes from the average. These percentage differences are applied to the point estimate and represented as the lower- and upper-confidence bounds for that value.
 
 For more detail on unit handling, see the [unit handling section](#unit-handling).
 
@@ -138,11 +140,15 @@ For more detail on unit handling, see the [unit handling section](#unit-handling
 ### Aerial Adjustment Functions
 [go back to input layer](#input-layer-and-behavior)
 
-The process for sampling and adjusting the measured plumes (described in [that part of the methodology](/docs/methodology.md#aerial-emissions-quantification)) includes several functions: one two do a deterministic bias correction, one to apply noise, one to determine the probability of detection, and another to choose what to do with noised values below 0.
+The process for sampling and adjusting the measured plumes (described in [that part of the methodology](/docs/methodology.md#aerial-emissions-quantification)) includes several functions: one to do a deterministic bias correction, one to apply noise to help simulate error, one to determine the probability of detection, and another to choose what to do with noised values below 0.
 
-The behavior of `ROAMSConfig` is to look at the name of the function given in the input, and looks it up in `roams.aerial.assumptions` (for the bias correction, noise, and negative-handling functions), or `roams.aerial.partial_detection` (partial detection probability function). If the name of the function doesn't exist in that space, the code will fail.
+For all but the noise function, the `ROAMSConfig` will look at the name of the function given in the input, and look it up in `roams.aerial.assumptions` (for the bias correction and negative-handling functions), or `roams.aerial.partial_detection` (for the partial detection probability function). If the name of the function doesn't exist in that space, the code will fail. The default behavior of `ROAMSConfig` is to not apply a bias correction (you can explicitly produce this behavior by supplying `None` as your `"correction_fn"` input).
 
-However, if you pass the input as a dictionary and provide a defined function, the `ROAMSConfig` will use the defined function instead of trying to look it up. The caveat is that the saved config will only contain the name of your defined function, so other users will not be able to use it - the name of that function won't exist in the places where it will look for them.
+For the noise function, the input is expected to be passed as a dictionary with at least a key `"name"`. The string value under this key should be a method that can be looked up within `numpy.random`. The remaining key: value pairs in the dictionary should be parameter arguments for that noise function (except for `size`, which the code will supply based on the sampled aerial data to apply the noise to). The specified noise function will be used to generate noise that will be applied multiplicatively to sampled + corrected aerial observations. For example `{"name":"normal","loc":2.0,"scale":1.0}` would specify a noise distribution drawn from N(2,1), which will then be applied multiplicatively with sampled aerial observations. If the `"noise_fn"` argument is `None`, then no noise will be applied.
+
+It's possible that after applying random noise to your sample, there are emissions values below 0. The default behavior to handle values below 0 is in `roams.assumptions.zero_out`, which will set values below 0 to 0. If you would rather keep them, you can specify `"handle_negative"` as `None` (or `null` in your input file), in which case no handling is done at all.
+
+If you instantiate the `ROAMSConfig` input as a dictionary (as opposed to a file on disk) and provide a defined function, the `ROAMSConfig` will use the defined function instead of trying to look it up. The caveat is that the saved config will only contain the name of your defined function, so other users will not be able to use it - the name of that function won't exist in the places where it will look for them.
 
 ### Unit Handling
 Each class in the input layer is responsible for furnishing quantities of interest to the `ROAMSModel` in known, constant units. The common units of computation to be used are in `roams.constants`. After having used values from the inputs to create and quantify new results, it is intended that it can be confident of the units of these quantities - specifically that they are in these common units.
@@ -165,8 +171,20 @@ graph LR;
 
 The goal of this method is to establish samples of the simulated production emissions, and aerially measured emissions (at least for specified production and midstream infrastructure in the `asset_groups` argument, but also whatever other asset groups are specified there). By the end of this method, the following attributes should be defined:
 
-* `simulated_sample`: A `np.ndarray`  whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with (column-wise) sorted ascending values of simulated emissions values in `COMMON_EMISSIONS_UNITS`, which may or may not have been re-sampled with stratification.
-* `aerial_samples`: A dictionary of of {string : tuple} pairs. Each string key is a `lower()`-ed asset group name provided in the input file (`"asset_groups"`, see README), of which there should always be `"production"` and `"midstream"`, but you may specify more. The tuple values are a pair of (sampled adjusted and noised emissions , partial detection correction). Each of those values is an array of size [number of emitting sources] x [number of monte carlo iterations]. The partial detection corrections correspond elementwise to emissions in the same tuple pair. These samples represent the results of the aerial sampling and adjustment procedure for each asset group specified in your input file.
+* `simulated_sample`: A `np.ndarray`  whose shape is [number of wells to simulate] x [number of monte-carlo iterations]. Should be filled with (column-wise) sorted ascending values of simulated emissions values in `COMMON_EMISSIONS_UNITS`, which may or may not have been re-sampled with stratification. This is created by `make_simulated_sample`.
+* `aerial_samples`: A dictionary of of {string : tuple} pairs. Each string key is a `lower()`-ed asset group name provided in the input file (`"asset_groups"`, see README), of which there should always be `"production"` and `"midstream"`, but you may specify more. The tuple values are a pair of (sampled adjusted and noised emissions , partial detection correction). Each of those values is an array of size [number of emitting sources] x [number of monte carlo iterations]. The partial detection corrections correspond elementwise to emissions in the same tuple pair. These samples represent the results of the aerial sampling and adjustment procedure for each asset group specified in your input file. This is created by `make_aerial_samples`
+
+#### make_simulated_sample
+
+The `make_simulated_sample` method is very simplistic. If directed to stratify the simulated emissions (via `"stratify_sim_sample"`), it will use the prevalence of covered productivity distribution in simulated productivity quantiles (quantiles that are pre-set) to generate re-weighted samples of the simulated emissions, so that associated well-site-level productivity is more representative of estimated "real" well site productivity. The method `stratify_sample` from `roams.simulated.stratify` performs this operation. One of the crucial arguments to this function is `quantiles`, which defines which quantiles of simulated production will be computed and used for the analysis. The default of this argument is `roams.simulated.stratify._QUANTILES`, and is in 10% increments up to the median, then 5% increments up to 95%, then 1% increments up to 99%, then goes to 99.5%, then 0.1% increments up to 100%. There isn't a super easy way to change what quantiles are used in the stratification process. But it would suffice to overwrite the `make_simulated_sample` method in a child class with a copy of the original content, and pass your own `quantiles=` keyword argument with your quantiles of interest.
+
+**NOTE** that the code expects the covered productivity distribution file (`"covered_productivity_dist_file"` in the input) is a *well-level* (rather than *well-site level*) quantification of covered productivity. The code will very roughly translate the *well-level* distribution of productivity to a *well-site level* distribution of productivity by scaling each value in the distribution by the average number of wells per site (`"wells_per_site"` in the input). Based on the size of the pre-set quantiles, it should contain a value for each quantile bin from 0% to 100%, in uniform increments of at most 0.1%. This is because the smallest pre-set quantile bin has a size of 0.1%. It's important that the bins are uniform, because the code fundamentally expects each bin to be the same size for the math to work out (i.e. the number of values that fall within a certain range is exactly proportional to the fraction of well sites whose productivity falls within that range).
+
+If not directed to do stratified sampling, it will just sample with replacement from the provided simulated emissions values to produce an emissions size distribution for each monte-carlo iteration.
+
+#### make_aerial_samples
+
+The `make_aerial_samples` function will iterate through each of the `asset_groups` specified in the input and perform the same sampling, adjustment, and noising to each. The result for each is two tables: one of sampled, adjusted, and noised emissions, and another of the corresponding partial detection correction for each observation. The values in the tables correspond by index: the emissions value in the 10th row and 15th column has a partial detection correction equal to the value in the 10th row and 15th column of the partial detection correction table. 
 
 ### combined_prod_samples
 
@@ -198,7 +216,7 @@ In each case, the relevant emissions quantity is computed as `[CH4 loss rate] * 
 ## Output Layer
 [back to top](#implementation)
 
-The "output layer" is supposed to be an abstraction of the task of generating human-readable (and/or machine usable) results based on what was computed in the processing layer. Currently, this is barely abstracted at all, and is entirely embodied in the last part of `perform_analysis()` of the `ROAMSModel` class, via the [generate_and_write_outputs](#generate_and_write_outputs) method.
+The "output layer" is supposed to be an abstraction of the task of generating human-readable (and/or machine usable) results based on what was computed in the processing layer. Currently, this is barely abstracted at all, and is entirely embodied in the last part of `perform_analysis()` of the `ROAMSModel` class, via the [generate_and_write_outputs](#generate_and_write_outputs) method. In some tabular outputs, confidence intervals are provided for value estimates. Their derivation is described in [representing uncertainty](#representing-uncertainty).
 
 ```mermaid
 graph LR;
@@ -215,6 +233,20 @@ This method is responsible for generating outputs based on what was computed in 
 3. Create tabular outputs by calling `make_tablar_outputs()`, which just calls a sequence of other methods. Each method is responsible for putting a `pd.DataFrame` into the `self.table_outputs` dictionary. The key under which the DataFrame is saved will be the filename.
 4. Go through each of the `name : pd.DataFrame` item pairs in `self.table_outputs` and save the DataFrame without it's index as a csv file with that name.
 5. Call `gen_plots()` to create and save desired plots to the output folder.
+
+
+### Representing uncertainty
+
+The methodology implemented here results in a collection of simulated production emissions and sampled aerial emissions distributions. From this collection, the code uses estimators (like `sum`) to create a collection of point estimates. Here is how the code determines upper- and lower-bound confidence intervals from this collection of estimates:
+
+1. Look at the range of estimates, and find the 2.5th and 97.5th percentile values (using `np.quantile`)
+2. Find the difference between each and the mean estimate
+3. Divide each difference by the square root of the average number of well site visits (`sqrt([total well visits / wells per site]/sites to simulate)`)
+4. Define each bound as the mean ± this corrected difference.
+
+This is implemented in the method `mean_and_quantiles_fromsamples`, which takes an array of length `N` (where it's expected that `N` is the number of monte-carlo samples), and will return a `pd.Series` whose indices are `"Avg"`, `"2.5% CI"`, and `"97.5% CI"`.
+
+This methodology is also detailed in the [original research](https://doi.org/10.1038/s41586-024-07117-5).
 
 ## Tests and Validation
 [back to top](#implementation)
@@ -237,7 +269,7 @@ These tests are hopefully comprehensive enough, but obviously no test suite can 
 
 "Validation", in this context, means checking the results produced by this code with results produced by a different implementation of the same model. The results produced by this python model have been validated against a prior implementation of this model (used for [this paper](https://doi.org/10.1038/s41586-024-07117-5)) in Analytica - proprietary GUI-based modeling software. A part of this codebase (in `roams/tests/validation/deterministic_validation.py`) define a deterministic version of the generic `ROAMSModel`, and execute the logic on a small dataset. 
 
-In a small `unittest.TestCase` in that file, it asserts that the results of this run exactly match that produced by Analytica. These unit tests are included in the unit test suite. You can also run this validation exercise as a script (`python roams/tests/validation/deterministic_validation.py`) to run that version of the model and get a `"_deterministic_validation_exercise"` set of results saved to your `run_results` folder. These results likely won't be very interesting to you UNLESS you have access to the Analytica model ran on the same input values.
+In a small `unittest.TestCase` in that file, it asserts that the results of this run exactly match that produced by Analytica. These unit tests are included in the unit test suite. You can also run this validation exercise as a script (`python roams/tests/validation/deterministic_validation.py`) to run that version of the model and get a `"_deterministic_validation_exercise"` set of results saved to your `run_results` folder. These results likely won't be very interesting to you UNLESS you have access to the Analytica model run on the same input values.
 
 ## Computational Resources
 [back to top](#implementation)
