@@ -59,6 +59,7 @@ TEST_CONFIG = {
     "n_mc_samples" : 100,
     "prod_transition_point" : None,
     "partial_detection_correction" : True,
+    "simualte_error": True,
     "noise_fn": {"name":"normal","loc":1.0,"scale":1.0},
     "PoD_fn" : "bin",
     "correction_fn" : "power_correction",

@@ -93,6 +93,7 @@ _DEFAULT_CONFIGS = {
     "handle_negative" : "zero_out",
     "PoD_fn" : "bin",
     "correction_fn" : None,
+    "simulate_error": True,
     "noise_fn" : {"name":"normal","loc":1.07,"scale":0.4},
     
     # Output specification defaults. 
