@@ -92,7 +92,7 @@ _DEFAULT_CONFIGS = {
     "handle_negative" : "zero_out",
     "PoD_fn" : "bin",
     "correction_fn" : "power_correction",
-    "noise_fn" : None,
+    "noise_fn" : {"name":"normal","loc":1.07,"scale":0.4},
     
     # Output specification defaults. 
     # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
@@ -453,6 +453,11 @@ class ROAMSConfig:
             # E.g. fn = np.random.normal
             fn = getattr(np.random,name)
 
+            log.info(
+                f"The function `np.random.{name}` will be used to generate "
+                "noise to sampled emissions values, with named arguments: "
+                f"{', '.join([f'{k}={v}' for k,v in self.noise_fn.items()])}"
+            )
             # E.g. self.noise_fn = lambda emissions: np.random.normal(loc=1.0,scale=1.0,size=emissions.shape) * emissions
             # (i.e. take random noise the same shape as emissions, and multiply element-wise with emissions)
             self.noise_fn = lambda emissions: fn(**self.noise_fn,size=emissions.shape) * emissions
