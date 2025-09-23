@@ -94,7 +94,7 @@ _DEFAULT_CONFIGS = {
     "PoD_fn" : "bin",
     "correction_fn" : None,
     "simulate_error": True,
-    "noise_fn" : {"name":"normal","loc":1.07,"scale":0.4},
+    "noise_fn" : {"name":"normal","loc":1.0,"scale":0.39},
     
     # Output specification defaults. 
     # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
