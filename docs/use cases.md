@@ -3,7 +3,7 @@
 
 This part of the docs is intended to describe different ways to use the codebase and change behavior locally for your own purposes. As such it's intended to be dynamic, and change as researchers find new ways to make use of it.
 
-Currently, the only known use case is to run a ROAMS model for the purpose of replication or validation. But there are several imagined use cases too, which may help researchers adopt the code to their own purposes.
+Currently, the only known use case is to run a ROAMS model for the purpose of replication or validation. But there are several other potential use cases too, which may help researchers adopt the code to their own purposes.
 
 * [Running a ROAMS Model with an input file](#running-the-roams-model-with-an-input-file) (the known use case)
 * [Running a ROAMS Model with a dictionary](#running-the-roams-model-with-a-dictionary) (the known use case)
@@ -25,7 +25,11 @@ if __name__=="__main__":
     m.perform_analysis()
 ```
 
-This will execute the ROAMS methodology with the given input specification, and so corresponds to the estimation of emissions in only one survey region.
+In anticipation of users wanting this behavior, there is currently a script (`roams/scripts/run_roams_model.py`) that can take your input file as an argument and execute this simple logic:
+
+```shell
+> python roams/run_roams_model.py "/path/to/my/input file.json"
+```
 
 ## Running the ROAMS Model with a dictionary
 [Back to the top](#use-cases)
@@ -39,15 +43,19 @@ from roams.model import ROAMSModel
 production_value = compute_production_value()
 
 # You can define custom functions that aren't contained in the codebase
-# E.g. a difference application of noise to sampled & adjusted aerial emissions
-def uniform_noise(emissions_array):
-    noise = np.random.uniform(0,2,emissions_array.shape)
-    return emissions_array * noise
+# E.g. a different bias correction of aerial measurement
+def piecewise_linear_correction(emissions_array):
+    multiplier = np.ones(emissions_array.shape)
+    
+    multiplier[emissions_array<10] = 1.1
+    multiplier[emissions_array>=10] = 0.90
+    
+    return emissions_array * multiplier
 
 # dictionary of inputs
 my_input = {
     ...
-    "noise_fn": uniform_noise,
+    "correction_fn": piecewise_linear_correction,
     ...
     "total_covered_ngprod_mcfd" : production_value,
 }

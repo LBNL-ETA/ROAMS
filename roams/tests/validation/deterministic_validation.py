@@ -45,9 +45,9 @@ INPUT = {
     "covered_productivity_dist_unit" : None,
     "state_ghgi_file" : STATE_GHGI_FILENAME,
     "ghgi_co2eq_unit" : "MMT/yr",
-    "enverus_state_production_file" : STATE_PROD_FILENAME,
-    "enverus_natnl_production_file" : NATNL_PROD_FILENAME,
-    "enverus_prod_unit" : "mscf/yr",
+    "production_state_est_file" : STATE_PROD_FILENAME,
+    "production_natnl_est_file" : NATNL_PROD_FILENAME,
+    "production_est_unit" : "mscf/yr",
     "ghgi_ch4emissions_ngprod_file" : GHGI_GASPROD_FILENAME,
     "ghgi_ch4emissions_ngprod_uncertainty_file" : GHGI_GASPROD_UNC_FILENAME,
     "ghgi_ch4emissions_petprod_file" : GHGI_OILPROD_FILENAME,
@@ -67,7 +67,9 @@ INPUT = {
     "prod_transition_point" : None,
     "midstream_transition_point" : 40, 
     "partial_detection_correction" : True,
-    "simulate_error" : False, # False b/c we don't want this added noise
+    "correction_fn": {"name":"power","constant":4.08,"power":0.77},
+    "simulate_error": False,
+    "noise_fn" : {"name":"normal","loc":1.0,"scale":0.0}, # There should be no noise.
     "foldername" : "_deterministic_validation_exercise",
     "save_mean_dist" : False,
     "loglevel" : logging.WARNING,

@@ -1,6 +1,7 @@
 from datetime import datetime
+from functools import partial
+from copy import deepcopy
 import logging
-from collections.abc import Iterable, Callable
 
 import yaml
 import numpy as np
@@ -46,9 +47,9 @@ _REQUIRED_CONFIGS = {
     # Midstream required GHGI inputs
     "state_ghgi_file" : str,
     "ghgi_co2eq_unit" : str,
-    "enverus_state_production_file" : str,
-    "enverus_natnl_production_file" : str,
-    "enverus_prod_unit" : str,
+    "production_state_est_file" : str,
+    "production_natnl_est_file" : str,
+    "production_est_unit" : str,
     "ghgi_ch4emissions_ngprod_file" : str,
     "ghgi_ch4emissions_ngprod_uncertainty_file" : str,
     "ghgi_ch4emissions_petprod_file" : str,
@@ -89,11 +90,11 @@ _DEFAULT_CONFIGS = {
     "n_mc_samples" : 100,
     "prod_transition_point" : None,
     "partial_detection_correction" : True,
-    "simulate_error" : True,
     "handle_negative" : "zero_out",
     "PoD_fn" : "bin",
-    "correction_fn" : "power_correction",
-    "noise_fn" : "normal",
+    "correction_fn" : None,
+    "simulate_error": True,
+    "noise_fn" : {"name":"normal","loc":1.0,"scale":0.39},
     
     # Output specification defaults. 
     # `None` may result in some opinionated assignment behavior in ROAMSConfig class.
@@ -159,7 +160,7 @@ class ROAMSConfig:
         Args:
             config_dict (str | dict): 
                 Either path to the specification JSON file, or a parsed 
-                coming from such a file.
+                dictionary coming from such a file.
 
             _req (dict, optional):
                 A dictionary of lists, where in each list are tuples of 
@@ -202,11 +203,27 @@ class ROAMSConfig:
                 Defaults to GHGIDataInput.
 
         Raises:
+            TypeError:
+                When the given `config` is not a string or dictionary.
+                When a required input is not the correct type.
+                When the `correction_fn` and/or `noise_fn` isn't either None 
+                or a dictionary.
+
+
             KeyError:
                 When a required part of the input specification is missing.
+                When `correction_fn` or `noise_fn` are passed as dictionaries, 
+                but don't have "name" keys.
+                When "production" and/or "midstream" are missing designations 
+                from `asset_groups`.
 
             ValueError:
                 When the type of a required input specification is incorrect.
+                When gas composition of CH4 isn't a number.
+                When gas composition adds up to more than 1.
+                When gas composition adds up to less than 0.8.
+                When the "production" and "midstream" asset groups describe the same infrastructure.
+
         """
         # Convert config_dict to dictionary if it's a string
         if isinstance(config,str):
@@ -214,6 +231,14 @@ class ROAMSConfig:
             with open(config,"r") as f:
                 # Load content which may include non-JSON-safe windows paths ("C:\path\to\file.csv")
                 config = yaml.safe_load(f)
+
+        elif isinstance(config,dict):
+            config = deepcopy(config)
+
+        else:
+            raise TypeError(
+                f"`config` can only be passed as a dictionary or json file"
+            )
         
         # Apply global random seed ASAP
         # This is important for any input classes that require resampling or 
@@ -231,7 +256,7 @@ class ROAMSConfig:
                 )
             
             if not isinstance(config[k],v):
-                raise ValueError(
+                raise TypeError(
                     f"The input value '{k}'={config[k]} is expected to be "
                     f"type {v}, but it wasn't. You'll have to update your "
                     "input."
@@ -244,7 +269,9 @@ class ROAMSConfig:
                 log.info(
                     f"{k} not provided as an argument. Will set it to {v}."
                 )
-                config[k] = v
+                # Copy the value so that application of default behavior after 
+                # this can't alter the value in _DEFAULT_CONFIGS
+                config[k] = deepcopy(v)
 
         # By this point all the keys in _req and _def are in `config`. We 
         # assign them all as attributes
@@ -324,7 +351,41 @@ class ROAMSConfig:
                 "'production'."
             )
         
-        self._config = config.copy()
+        if isinstance(config["correction_fn"],dict) and "name" not in config["correction_fn"].keys():
+            raise KeyError(
+                "The 'correction_fn' argument needs to be either `None` (in "
+                "which case no mean correction will be applied to sampled "
+                "aerial emissions) or a dictionary with at least a 'name' key."
+                " See the README for more details."
+            )
+        elif (not isinstance(config["correction_fn"],dict)) and (config["correction_fn"] is not None):
+            raise TypeError(
+                "The `correction_fn` argument can only either be `None` (in "
+                "which case no mean correction will be applied to sampled "
+                "aerial emissions), or a dictionary that specifies a method "
+                "of roams.aerial.assumptions to use. See the README for more "
+                "details."
+            )
+        
+        if isinstance(config["noise_fn"],dict) and "name" not in config["noise_fn"].keys():
+            raise KeyError(
+                "The 'noise_fn' argument needs to be either `None` (in which "
+                "case no noise will be applied to sampled aerial emissions) "
+                "or a dictionary with at least a 'name' key. See the README "
+                "for more details."
+            )
+        elif (not isinstance(config["noise_fn"],dict)) and (config["noise_fn"] is not None):
+            raise TypeError(
+                "The `noise_fn` argument can only either be `None` (in which "
+                "case no noise will be applied to sampled aerial emissions), "
+                " or a dictionary that specifies a method of numpy.random to use. "
+                "See the README for more details."
+            )
+        
+        # self._config is a record of the read & default-filled input, before 
+        # additional default behavior (e.g. turning method specification into 
+        # actual methods).
+        self._config = deepcopy(config)
         
         # Do some after-the-fact assignment with specific behaviors   
         self.default_input_behavior()
@@ -374,8 +435,8 @@ class ROAMSConfig:
 
         self.midstreamGHGIData = midstreamGHGHIDataClass(
             self.state_ghgi_file,
-            self.enverus_state_production_file,
-            self.enverus_natnl_production_file,
+            self.production_state_est_file,
+            self.production_natnl_est_file,
             self.ghgi_ch4emissions_ngprod_file,
             self.ghgi_ch4emissions_ngprod_uncertainty_file,
             self.ghgi_ch4emissions_petprod_file,
@@ -385,7 +446,7 @@ class ROAMSConfig:
             frac_aerial_midstream_emissions=self.frac_aerial_midstream_emissions,
             ghgi_co2eq_unit=self.ghgi_co2eq_unit,
             ghgi_ch4emissions_unit=self.ghgi_ch4emissions_unit,
-            enverus_prod_unit=self.enverus_prod_unit,
+            production_est_unit=self.production_est_unit,
             loglevel=self.loglevel,
         )
 
@@ -427,13 +488,47 @@ class ROAMSConfig:
         if isinstance(self.PoD_fn,str):
             self.PoD_fn = getattr(roams.aerial.partial_detection,self.PoD_fn)
         
-        # Look up the bias correction function
-        if isinstance(self.correction_fn,str):
-            self.correction_fn = getattr(roams.aerial.assumptions,self.correction_fn)
+        # Look up the mean correction function
+        if isinstance(self.correction_fn,dict):
+            # E.g. name = "power"
+            name = self.correction_fn["name"]
+            
+            # E.g. kwargs = {"constant":4.08,"power":0.77}
+            kwargs = {k:v for k,v in self.correction_fn.items() if k!="name"}
+            
+            # E.g. fn = roams.aerial.assumptions.power
+            correction_fn = getattr(roams.aerial.assumptions,name)
+
+            log.info(
+                f"The function `roams.aerial.assumptions.{name}` will be used "
+                "to do mean correction of sampled emissions values, with "
+                "named arguments: "
+                f"{', '.join([f'{k}={v}' for k,v in kwargs.items()])}"
+            )
+            # E.g. self.correction_fn = lambda emissions: power(constant=4.08,power=0.77,emissions_rate=emissions)
+            # (i.e. Apply prescribed power correction to emissions)
+            self.correction_fn = partial(correction_fn,**kwargs)
+            # self.correction_fn = lambda emissions: correction_fn(**kwargs,emissions_rate=emissions)
         
         # Look up the error-simulating noise function
-        if isinstance(self.noise_fn,str):
-            self.noise_fn = getattr(roams.aerial.assumptions,self.noise_fn)
+        if isinstance(self.noise_fn,dict):
+            # E.g. name = "normal"
+            name = self.noise_fn["name"]
+            
+            # E.g. kwargs = {"loc":1.07,"scale":0.4}
+            kwargs = {k:v for k,v in self.noise_fn.items() if k!="name"}
+            
+            # E.g. fn = np.random.normal
+            noise_fn = getattr(np.random,name)
+
+            log.info(
+                f"The function `np.random.{name}` will be used to generate "
+                "noise to sampled emissions values, with named arguments: "
+                f"{', '.join([f'{k}={v}' for k,v in kwargs.items()])}"
+            )
+            # E.g. self.noise_fn = lambda emissions: np.random.normal(loc=1.0,scale=1.0,size=emissions.shape) * emissions
+            # (i.e. take random noise the same shape as emissions, and multiply element-wise with emissions)
+            self.noise_fn = lambda emissions: noise_fn(**kwargs,size=emissions.shape) * emissions
         
         # Look up the handle-negative-emissions function
         if isinstance(self.handle_negative,str):
@@ -455,16 +550,7 @@ class ROAMSConfig:
                 The key: value pairs resulting from the reading of the given 
                 config file.
         """
-        result = self._config.copy()
-        for config, value in self._config.items():
-            value = getattr(self,config)
-            
-            # Keep all configs as-is, except for functions. Take only their 
-            # names, like was specified in the input file.
-            if isinstance(value,Callable):
-                result[config] = value.__name__
-
-        return result
+        return deepcopy(self._config)
     
     @property
     def ch4_total_covered_production_mass(self) -> float:

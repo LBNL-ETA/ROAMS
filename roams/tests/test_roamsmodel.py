@@ -52,9 +52,9 @@ TEST_CONFIG = {
     "wells_per_site" : 3.14159,
     "state_ghgi_file" : STATE_GHGI_FILENAME,
     "ghgi_co2eq_unit" : "MMT/yr",
-    "enverus_state_production_file" : STATE_PROD_FILENAME,
-    "enverus_natnl_production_file" : NATNL_PROD_FILENAME,
-    "enverus_prod_unit" : "mscf/yr",
+    "production_state_est_file" : STATE_PROD_FILENAME,
+    "production_natnl_est_file" : NATNL_PROD_FILENAME,
+    "production_est_unit" : "mscf/yr",
     "ghgi_ch4emissions_ngprod_file" : NATNL_NGPROD_GHGI_FILENAME,
     "ghgi_ch4emissions_ngprod_uncertainty_file" : NATNL_NGPROD_UNCERT_GHGI_FILENAME,
     "ghgi_ch4emissions_petprod_file" : NATNL_PETPROD_GHGI_FILENAME,
@@ -67,9 +67,11 @@ TEST_CONFIG = {
     "n_mc_samples" : 100,
     "prod_transition_point" : 10,
     "partial_detection_correction" : True,
-    "simulate_error" : False,
+    "noise_fn" : None,
     "PoD_fn" : "bin",
-    "correction_fn" : "power_correction",
+    "correction_fn" : {"name":"power","constant":4.08,"power":0.77},
+    "simulate_error": True,
+    "noise_fn": {"name":"normal","scale":1.0,"loc":1.0},
     "midstream_transition_point" : 1000,
     "foldername" : "_roamsmodeltest",
     "save_mean_dist" : True,
@@ -209,9 +211,8 @@ class ROAMSModelTests(TestCase):
         em_ref, windnorm_ref = self.model.get_aerial_survey_sample()
 
         # "noise" function is just multiplying by 2.
-        self.model.cfg.noise_fn = lambda em: em*2
-        # Simulate error using this noise_fn
         self.model.cfg.simulate_error = True
+        self.model.cfg.noise_fn = lambda em: em*2
         np.random.seed(1)
         em_2x, windnorm_2x = self.model.get_aerial_survey_sample()
 
@@ -286,7 +287,7 @@ class ROAMSModelTests(TestCase):
         self.model.cfg.simulate_error = False       # Don't add random noise
         self.model.cfg.partial_detection_correction = True  # Tell it to add partial detection
         self.model.cfg.PoD_fn = _half_pod           # Use PoD where pos emissions get P = .5 -> add 1x emissions
-        self.model.cfg.n_mc_samples = 100          # Use 1000 MC samples
+        self.model.cfg.n_mc_samples = 100           # Use 100 MC samples
         self.model.cfg.num_wells_to_simulate = 10   # Simulate 10 wells only
 
         # Set a seed to control what the expected random behavior is
@@ -338,7 +339,7 @@ class ROAMSModelTests(TestCase):
         self.model.cfg.simulate_error = False       # Don't add random noise
         self.model.cfg.partial_detection_correction = True  # Tell it to add partial detection
         self.model.cfg.PoD_fn = _half_pod           # Use PoD where >0 emissions -> P = .5
-        self.model.cfg.n_mc_samples = 100          # Use 1000 MC samples
+        self.model.cfg.n_mc_samples = 100           # Use 100 MC samples
         self.model.cfg.num_wells_to_simulate = 10   # Simulate 10 wells only
 
         # Set a seed to control what the expected random behavior is
@@ -379,7 +380,6 @@ class ROAMSModelTests(TestCase):
         self.model.cfg.pod_fn = _half_pod
         self.model.cfg.correction_fn = None
         
-
         # Make the up the samples: pretend like the two aerial plumes
         # got sampled in each MC run
         
@@ -536,8 +536,8 @@ class ROAMSModelTests(TestCase):
             # Load content which may include non-JSON-safe windows paths ("C:\path\to\file.csv")
             config = yaml.safe_load(f)
 
-        # Assert the loaded config is the same as that used for the test
-        self.assertEqual(config,TEST_CONFIG)
+        # Assert the loaded config is the same as that used for the test, after applying default behavior.
+        self.assertEqual(config,self.model.cfg._config)
     
 if __name__=="__main__":
     import unittest

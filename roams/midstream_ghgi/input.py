@@ -30,20 +30,20 @@ class GHGIDataInput:
             values are supposed to be CO2eq emissions from the prescribed 
             `state`.
         
-        enverus_state_production_file (str): 
-            A path to the downloaded Enverus production data, whose first 
+        production_state_est_file (str): 
+            A path to the state-level production estimate data, whose first 
             column will be used as an index and holds the state labels, one 
             of which should be the given `state` argument. The code expects 
             that columns are years, and values are total state production, 
-            whose units are given by the `enverus_prod_unit` argument. 
+            whose units are given by the `production_est_unit` argument. 
         
-        enverus_natnl_production_file (str): 
-            A path to the downloaded national Enverus production data, 
-            which is monthly data. The code will try to aggregate the 
-            gas and oil production data by year, and then use the result to 
-            define national production.
+        production_natnl_est_file (str): 
+            A path to the national-level production estamate data, which is 
+            monthly data. The code will try to aggregate the gas and oil 
+            production data by year, and then use the result to define 
+            national production.
             NOTE: The code will assume that the units of gas production in 
-            this file are the same as that in `enverus_state_production_file`.
+            this file are the same as that in `production_state_est_file`.
         
         ghgi_ch4emissions_ngprod_file (str): 
             The path to a downloaded GHGI result table "CH4 Emissions from 
@@ -90,7 +90,7 @@ class GHGIDataInput:
         
         frac_aerial_midstream_emissions (float): 
             The fraction of the total estimated midstream emissions that 
-            are likely aerially detectable.
+            are likely above the minimum detection level.
         
         state_ghgi_unit (str, optional):
             The unit of values in `state_ghgi_file`. Numerator and 
@@ -103,9 +103,9 @@ class GHGIDataInput:
             this unit should be separated with "/".
             Defaults to "kt/yr".
         
-        enverus_prod_unit (str, optional): 
-            The units of NG production in the enverus state and national 
-            production files. Numerator and denominator of this unit should 
+        production_est_unit (str, optional): 
+            The units of NG production in the state and national production 
+            estimate files. Numerator and denominator of this unit should 
             be separated with "/".
             Defaults to "mcf/yr".
 
@@ -119,8 +119,8 @@ class GHGIDataInput:
     def __init__(
             self,
             state_ghgi_file : str,
-            enverus_state_production_file : str,
-            enverus_natnl_production_file : str,
+            production_state_est_file : str,
+            production_natnl_est_file : str,
             ghgi_ch4emissions_ngprod_file : str,
             ghgi_ch4emissions_ngprod_uncertainty_file : str,
             ghgi_ch4emissions_petprod_file : str,
@@ -130,15 +130,15 @@ class GHGIDataInput:
             frac_aerial_midstream_emissions : float,
             ghgi_co2eq_unit = "MMT/yr",
             ghgi_ch4emissions_unit = "kt/yr",
-            enverus_prod_unit = "mcf/yr",
+            production_est_unit = "mcf/yr",
             loglevel = logging.INFO
         ):
         self.log = logging.getLogger("roams.midstream_ghgi.input.GHGIDataInput")
         self.log.setLevel(loglevel)
 
         self.state_ghgi_file = state_ghgi_file
-        self.enverus_state_production_file = enverus_state_production_file
-        self.enverus_natnl_production_file = enverus_natnl_production_file
+        self.production_state_est_file = production_state_est_file
+        self.production_natnl_est_file = production_natnl_est_file
         
         self.ghgi_ch4emissions_ngprod_file = ghgi_ch4emissions_ngprod_file
         self.ghgi_ch4emissions_ngprod_uncertainty_file = ghgi_ch4emissions_ngprod_uncertainty_file
@@ -164,7 +164,7 @@ class GHGIDataInput:
         
         self.state_ghgi_unit = ghgi_co2eq_unit
         
-        self.enverus_prod_unit = enverus_prod_unit
+        self.production_est_unit = production_est_unit
 
         # Load input datasets
         self.natnl_prod_data = self.load_national_prod_data()
@@ -187,17 +187,17 @@ class GHGIDataInput:
         uncertainty_mul = self.get_natl_midstream_ch4_uncertainty()
 
         # E.g. _, denom = "tcf", "yr"
-        _, denom = self.enverus_prod_unit.split("/")
+        _, denom = self.production_est_unit.split("/")
         
         # Convert to mcf/<time> so that we can multiply directly with the CH4 density
         # (in kg/mcf)
         natnl_prod = self.natnl_prod_data.loc[self.year,"Gas"]
         # E.g. _, denom = "tcf", "yr"
-        _, denom = self.enverus_prod_unit.split("/")
+        _, denom = self.production_est_unit.split("/")
 
         natnl_prod_mcf = convert_units(
             natnl_prod,
-            self.enverus_prod_unit,
+            self.production_est_unit,
             f"mcf/{denom}"
         )
         
@@ -266,7 +266,7 @@ class GHGIDataInput:
 
     def compute_state_lossrate(self) -> float:
         """
-        Use the state-level GHGI estimate and Enverus state-level production 
+        Use the state-level GHGI estimate and state-level production estimate 
         data to compute [CH4 lost in the state]/[CH4 produced in the state].
 
         Returns:
@@ -294,13 +294,13 @@ class GHGIDataInput:
         state_prod = self.state_prod_data.loc[self.state,self.year]
 
         # E.g. _, denom = "mcf", "yr"
-        _, denom = self.enverus_prod_unit.split("/")
+        _, denom = self.production_est_unit.split("/")
         
         # Convert to mcf/<time> so that we can multiply directly with the CH4 density
         # (in kg/mcf)
         state_prod_mcf = convert_units(
             state_prod,
-            self.enverus_prod_unit,
+            self.production_est_unit,
             f"mcf/{denom}"
         )
         
@@ -314,7 +314,7 @@ class GHGIDataInput:
             COMMON_EMISSIONS_UNITS
         )
         self.log.info(
-            f"Converted {state_prod:,.0f} {self.enverus_prod_unit} of NG production "
+            f"Converted {state_prod:,.0f} {self.production_est_unit} of NG production "
             f"into {state_prod_common_units:,.0f} {COMMON_EMISSIONS_UNITS} "
             f"of CH4 production at an assumed density of {CH4_DENSITY_KGMCF:.2f} "
             f"and CH4/NG fraction of {self.frac_production_ch4}."
@@ -414,7 +414,7 @@ class GHGIDataInput:
     
     def load_national_prod_data(self) -> pd.DataFrame:
         """
-        Read the given Enverus national production file, which is expected 
+        Read the given national production estimate file, which is expected 
         to be a monthly record of national production for both oil and gas.
         The code will create a "Year" column based on the given monthly dates, 
         then aggregate the results into each year.
@@ -427,19 +427,19 @@ class GHGIDataInput:
             pd.DataFrame:
                 The parsed and aggregated national production data, with 
                 an index of "Year", and columns of "Oil", and "Gas". The 
-                "Gas" column is in units of `self.enverus_prod_unit`.
+                "Gas" column is in units of `self.production_est_unit`.
         """
         self.log.info(
             "Loading national gas + oil production data from "
-            f"`{self.enverus_natnl_production_file}`."
+            f"`{self.production_natnl_est_file}`."
         )
         natnl_prod_data = pd.read_csv(
-            self.enverus_natnl_production_file
+            self.production_natnl_est_file
         )
         
         # E.g. "December 1, 1950" -> 1950
         natnl_prod_data["Year"] = (
-            natnl_prod_data["Enverus production month"]
+            natnl_prod_data["production month"]
             .str[-4:]
             .astype(int)
         )
@@ -573,11 +573,11 @@ class GHGIDataInput:
 
         # Load provided production data
         self.log.info(
-            f"Reading state NG production from: `{self.enverus_state_production_file}`"
+            f"Reading state NG production from: `{self.production_state_est_file}`"
         )
         # Make the first column an index. Should include "Methane".
         state_prod_data = pd.read_csv(
-            self.enverus_state_production_file,
+            self.production_state_est_file,
             index_col=0
         )
 

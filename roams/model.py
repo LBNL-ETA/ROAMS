@@ -351,7 +351,7 @@ class ROAMSModel:
 
         if self.cfg.simulate_error:
             self.log.debug(
-                f"Applying {self.cfg.simulate_error} to sampled {infra} emissions"
+                f"Applying {self.cfg.noise_fn} to sampled {infra} emissions"
             )
             emissions = self.cfg.noise_fn(emissions)
         
