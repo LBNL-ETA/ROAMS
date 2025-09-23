@@ -178,10 +178,7 @@ class ROAMSModelTests(TestCase):
         em_ref, windnorm_ref = self.model.get_aerial_survey_sample()
 
         # Correction function = 2x
-        new_config = deepcopy(TEST_CONFIG)
-        new_config["simulate_error"] = False
-        new_config["correction_fn"] = {"name":"linear","slope":2.0,"intercept":0.0}
-        self.model.cfg = ROAMSConfig(new_config)
+        self.model.cfg.correction_fn = lambda em: em*2
         np.random.seed(1)
         em_2x, windnorm_2x = self.model.get_aerial_survey_sample()
 
@@ -214,11 +211,8 @@ class ROAMSModelTests(TestCase):
         em_ref, windnorm_ref = self.model.get_aerial_survey_sample()
 
         # "noise" function is just multiplying by 2.
-        new_config = deepcopy(TEST_CONFIG)
-        new_config["correction_fn"] = None
-        new_config["simulate_error"] = True
-        new_config["noise_fn"] = {"name":"normal","loc":2.0,"scale":0.0}
-        self.model.cfg = ROAMSConfig(new_config)
+        self.model.cfg.simulate_error = True
+        self.model.cfg.noise_fn = lambda em: em*2
         np.random.seed(1)
         em_2x, windnorm_2x = self.model.get_aerial_survey_sample()
 

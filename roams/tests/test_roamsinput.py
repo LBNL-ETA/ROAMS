@@ -5,6 +5,8 @@ from copy import deepcopy
 
 from unittest import TestCase
 
+import numpy as np
+
 from roams.conf import TEST_DIR
 FAKE_INPUT_FILE = os.path.join(TEST_DIR,"_fake_input.json")
 
@@ -283,6 +285,51 @@ class ROAMSInputTests(TestCase):
         newconfig["correction_fn"] = {"constant":1.0,"power":1.0}
         with self.assertRaises(KeyError):
             c = ROAMSConfig(newconfig)
+        
+    def test_noisefn(self):
+        """
+        Assert that specification of normal noise occurs as intended.
+        """
+        # Specify 
+        config = deepcopy(TEST_CONFIG)
+        config["noise_fn"] = {"name":"normal","loc":1.0,"scale":1.0}
+        c = ROAMSConfig(config)
+        
+        # Set a fixed seed
+        np.random.seed(1)
+        results = c.noise_fn(np.ones(10))
+
+        np.testing.assert_array_almost_equal(
+            results,
+            np.array([2.62434536,  0.38824359,  0.47182825, -0.07296862,  1.86540763, -1.3015387 ,  2.74481176,  0.2387931 ,  1.3190391 ,  0.75062962]),
+            8
+        )
+
+    def test_power_correction_fn(self):
+        """
+        Assert that power correction function parameters are being handled 
+        correctly.
+        """
+        config = deepcopy(TEST_CONFIG)
+        config["correction_fn"] = {"name":"power","constant":2,"power":2} # 2 * (emissions ** 2)
+        c = ROAMSConfig(config)
+
+        x = np.arange(100)
+        result = c.correction_fn(x)
+        np.testing.assert_array_equal(result,2*(x**2))
+    
+    def test_linear_correction_fn(self):
+        """
+        Assert that linear correction function parameters are being handled 
+        correctly.
+        """
+        config = deepcopy(TEST_CONFIG)
+        config["correction_fn"] = {"name":"linear","slope":2,"intercept":1} # 2*emissions + 1
+        c = ROAMSConfig(config)
+
+        x = np.arange(100)
+        result = c.correction_fn(x)
+        np.testing.assert_array_equal(result,2*x + 1)
     
 if __name__=="__main__":
     import unittest

@@ -32,7 +32,9 @@ def linear(emissions_rate : np.ndarray, slope : float,intercept : float) -> np.n
             The slope m in the equation $m*E + b$.
 
         intercept (float):
-            The intercept b in the equation $m*E + b$.
+            The intercept b in the equation $m*E + b$. Expected to be the same 
+            units of emissions being handled by the code, specifically 
+            COMMON_EMISSIONS_UNITS.
         
     Returns:
         np.ndarray:
