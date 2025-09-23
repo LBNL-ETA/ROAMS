@@ -154,7 +154,8 @@ There are few concrete outputs of the ROAMS methodology, as different researcher
 
 But there are some outputs that are easy to derive and largely useful no matter what:
 
-* Total estimated basin CH<sub>4</sub> emissions = `[Total CH4 emissions of combined production distribution] + [Total midstream aerial CH4 emissions ≥ midstream transition point] + [Total estimated sub-MDL midstream CH4 emissions]`
+* Total estimated basin CH<sub>4</sub> emissions = `[Total CH4 emissions of combined production distribution] + [Total midstream aerial CH4 emissions ≥ MDL] + [Total estimated sub-MDL midstream CH4 emissions]`
+    * The midstream minimum detection level (MDL) is used as a de-facto transition point for aerially observed midstream emissions, because unlike with observed production emissions, the ROAMS model does not have a programmatic way to compute a transition point.
 * The fraction of basin CH<sub>4</sub> emissions from each measurement source = `[Total CH4 emissions from estimate source] / [Total estimated basin CH4 emissions]`
 * The fractional volumetric loss of CH<sub>4</sub> in the basin = `[Total estimated basin CH4 emissions] / [Total produced CH4 in the basin]`
 * The fractional energy loss of NG in the basin = `[Total embodied energy of basin NG emissions] / [Total embodied energy of all NG and oil produced in basin]`
