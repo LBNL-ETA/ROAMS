@@ -67,10 +67,10 @@ TEST_CONFIG = {
     "n_mc_samples" : 100,
     "prod_transition_point" : 10,
     "partial_detection_correction" : True,
-    "simulate_error": True,
     "noise_fn" : None,
     "PoD_fn" : "bin",
     "correction_fn" : {"name":"power","constant":4.08,"power":0.77},
+    "simulate_error": True,
     "noise_fn": {"name":"normal","scale":1.0,"loc":1.0},
     "midstream_transition_point" : 1000,
     "foldername" : "_roamsmodeltest",
@@ -178,7 +178,10 @@ class ROAMSModelTests(TestCase):
         em_ref, windnorm_ref = self.model.get_aerial_survey_sample()
 
         # Correction function = 2x
-        self.model.cfg.correction_fn = lambda em: em*2
+        new_config = deepcopy(TEST_CONFIG)
+        new_config["simulate_error"] = False
+        new_config["correction_fn"] = {"name":"linear","slope":2.0,"intercept":0.0}
+        self.model.cfg = ROAMSConfig(new_config)
         np.random.seed(1)
         em_2x, windnorm_2x = self.model.get_aerial_survey_sample()
 
@@ -211,8 +214,11 @@ class ROAMSModelTests(TestCase):
         em_ref, windnorm_ref = self.model.get_aerial_survey_sample()
 
         # "noise" function is just multiplying by 2.
-        self.model.cfg.simulate_error = True
-        self.model.cfg.noise_fn = lambda em: em*2
+        new_config = deepcopy(TEST_CONFIG)
+        new_config["correction_fn"] = None
+        new_config["simulate_error"] = True
+        new_config["noise_fn"] = {"name":"normal","loc":2.0,"scale":0.0}
+        self.model.cfg = ROAMSConfig(new_config)
         np.random.seed(1)
         em_2x, windnorm_2x = self.model.get_aerial_survey_sample()
 
@@ -541,4 +547,4 @@ class ROAMSModelTests(TestCase):
     
 if __name__=="__main__":
     import unittest
-    unittest.main(defaultTest="ROAMSModelTests.test_saves_config")
+    unittest.main()
