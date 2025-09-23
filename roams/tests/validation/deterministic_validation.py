@@ -67,7 +67,8 @@ INPUT = {
     "prod_transition_point" : None,
     "midstream_transition_point" : 40, 
     "partial_detection_correction" : True,
-    "correction_fn": "power_correction",
+    "correction_fn": {"name":"power","constant":4.08,"power":0.77},
+    "simulate_error": False,
     "noise_fn" : {"name":"normal","loc":1.0,"scale":0.0}, # There should be no noise.
     "foldername" : "_deterministic_validation_exercise",
     "save_mean_dist" : False,

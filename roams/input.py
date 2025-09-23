@@ -203,11 +203,26 @@ class ROAMSConfig:
                 Defaults to GHGIDataInput.
 
         Raises:
+            TypeError:
+                When the given `config` is not a string or dictionary.
+                When the `correction_fn` and/or `noise_fn` isn't either None 
+                or a dictionary.
+
+
             KeyError:
                 When a required part of the input specification is missing.
+                When `correction_fn` or `noise_fn` are passed as dictionaries, 
+                but don't have "name" keys.
+                When "production" and/or "midstream" are missing designations 
+                from `asset_groups`.
 
             ValueError:
                 When the type of a required input specification is incorrect.
+                When gas composition of CH4 isn't a number.
+                When gas composition adds up to more than 1.
+                When gas composition adds up to less than 0.8.
+                When the "production" and "midstream" asset groups describe the same infrastructure.
+
         """
         # Convert config_dict to dictionary if it's a string
         if isinstance(config,str):
@@ -240,7 +255,7 @@ class ROAMSConfig:
                 )
             
             if not isinstance(config[k],v):
-                raise ValueError(
+                raise TypeError(
                     f"The input value '{k}'={config[k]} is expected to be "
                     f"type {v}, but it wasn't. You'll have to update your "
                     "input."
@@ -335,6 +350,22 @@ class ROAMSConfig:
                 "'production'."
             )
         
+        if isinstance(config["correction_fn"],dict) and "name" not in config["correction_fn"].keys():
+            raise KeyError(
+                "The 'correction_fn' argument needs to be either `None` (in "
+                "which case no mean correction will be applied to sampled "
+                "aerial emissions) or a dictionary with at least a 'name' key."
+                " See the README for more details."
+            )
+        elif (not isinstance(config["correction_fn"],dict)) and (config["correction_fn"] is not None):
+            raise TypeError(
+                "The `correction_fn` argument can only either be `None` (in "
+                "which case no mean correction will be applied to sampled "
+                "aerial emissions), or a dictionary that specifies a method "
+                "of roams.aerial.assumptions to use. See the README for more "
+                "details."
+            )
+        
         if isinstance(config["noise_fn"],dict) and "name" not in config["noise_fn"].keys():
             raise KeyError(
                 "The 'noise_fn' argument needs to be either `None` (in which "
@@ -343,7 +374,7 @@ class ROAMSConfig:
                 "for more details."
             )
         elif (not isinstance(config["noise_fn"],dict)) and (config["noise_fn"] is not None):
-            raise ValueError(
+            raise TypeError(
                 "The `noise_fn` argument can only either be `None` (in which "
                 "case no noise will be applied to sampled aerial emissions), "
                 " or a dictionary that specifies a method of numpy.random to use. "
@@ -456,9 +487,26 @@ class ROAMSConfig:
         if isinstance(self.PoD_fn,str):
             self.PoD_fn = getattr(roams.aerial.partial_detection,self.PoD_fn)
         
-        # Look up the bias correction function
-        if isinstance(self.correction_fn,str):
-            self.correction_fn = getattr(roams.aerial.assumptions,self.correction_fn)
+        # Look up the mean correction function
+        if isinstance(self.correction_fn,dict):
+            # E.g. name = "power"
+            name = self.correction_fn["name"]
+            
+            # E.g. kwargs = {"constant":4.08,"power":0.77}
+            kwargs = {k:v for k,v in self.correction_fn.items() if k!="name"}
+            
+            # E.g. fn = roams.aerial.assumptions.power
+            fn = getattr(roams.aerial.assumptions,name)
+
+            log.info(
+                f"The function `roams.aerial.assumptions.{name}` will be used "
+                "to do mean correction of sampled emissions values, with "
+                "named arguments: "
+                f"{', '.join([f'{k}={v}' for k,v in kwargs.items()])}"
+            )
+            # E.g. self.correction_fn = lambda emissions: power(constant=4.08,power=0.77,emissions_rate=emissions)
+            # (i.e. Apply prescribed power correction to emissions)
+            self.correction_fn = lambda emissions: fn(**kwargs,emissions_rate=emissions)
         
         # Look up the error-simulating noise function
         if isinstance(self.noise_fn,dict):
@@ -474,7 +522,7 @@ class ROAMSConfig:
             log.info(
                 f"The function `np.random.{name}` will be used to generate "
                 "noise to sampled emissions values, with named arguments: "
-                f"{', '.join([f'{k}={v}' for k,v in self.noise_fn.items()])}"
+                f"{', '.join([f'{k}={v}' for k,v in kwargs.items()])}"
             )
             # E.g. self.noise_fn = lambda emissions: np.random.normal(loc=1.0,scale=1.0,size=emissions.shape) * emissions
             # (i.e. take random noise the same shape as emissions, and multiply element-wise with emissions)

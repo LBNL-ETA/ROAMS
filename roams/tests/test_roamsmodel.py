@@ -70,7 +70,7 @@ TEST_CONFIG = {
     "simulate_error": True,
     "noise_fn" : None,
     "PoD_fn" : "bin",
-    "correction_fn" : "power_correction",
+    "correction_fn" : {"name":"power","constant":4.08,"power":0.77},
     "midstream_transition_point" : 1000,
     "foldername" : "_roamsmodeltest",
     "save_mean_dist" : True,
