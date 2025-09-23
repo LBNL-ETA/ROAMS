@@ -71,6 +71,7 @@ TEST_CONFIG = {
     "noise_fn" : None,
     "PoD_fn" : "bin",
     "correction_fn" : {"name":"power","constant":4.08,"power":0.77},
+    "noise_fn": {"name":"normal","scale":1.0,"loc":1.0},
     "midstream_transition_point" : 1000,
     "foldername" : "_roamsmodeltest",
     "save_mean_dist" : True,

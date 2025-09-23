@@ -1,8 +1,6 @@
-from collections.abc import Callable
-
 import numpy as np
 
-def linear(slope : float,intercept : float, emissions_rate : np.ndarray) -> np.ndarray:
+def linear(emissions_rate : np.ndarray, slope : float,intercept : float) -> np.ndarray:
     """
     Apply a linear correction to observed emissions rates, in the form of:
     
@@ -27,15 +25,15 @@ def linear(slope : float,intercept : float, emissions_rate : np.ndarray) -> np.n
     correction.
 
     Args:
+        emissions_rate (np.ndarray): 
+            An np.ndarray of aerially observed emissions rates.
+
         slope (float):
             The slope m in the equation $m*E + b$.
 
         intercept (float):
             The intercept b in the equation $m*E + b$.
         
-        emissions_rate (np.ndarray): 
-            An np.ndarray of aerially observed emissions rates.
-
     Returns:
         np.ndarray:
             A record of observed emissions rate adjusted for measured bias 
@@ -43,7 +41,7 @@ def linear(slope : float,intercept : float, emissions_rate : np.ndarray) -> np.n
     """
     return slope*emissions_rate + intercept
 
-def power(constant : float,power : float, emissions_rate: np.ndarray) -> np.ndarray:
+def power(emissions_rate: np.ndarray, constant : float,power : float) -> np.ndarray:
     """
     Apply a power correction to observed emissions rates, in the form of:
     
@@ -64,15 +62,15 @@ def power(constant : float,power : float, emissions_rate: np.ndarray) -> np.ndar
     In that work, the constant was 4.08, and power was 0.77.
 
     Args:
+        emissions_rate (np.ndarray): 
+            An np.ndarray of aerially observed emissions rates.
+
         constant (float):
             The constant C in the equation $Ce^p$.
 
         power (float):
             The exponent p in the equation $Ce^p$.
         
-        emissions_rate (np.ndarray): 
-            An np.ndarray of aerially observed emissions rates.
-
     Returns:
         np.ndarray:
             A record of observed emissions rate adjusted for measured bias 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from collections.abc import Iterable, Callable
+from functools import partial
 from copy import deepcopy
 import logging
 
@@ -205,6 +205,7 @@ class ROAMSConfig:
         Raises:
             TypeError:
                 When the given `config` is not a string or dictionary.
+                When a required input is not the correct type.
                 When the `correction_fn` and/or `noise_fn` isn't either None 
                 or a dictionary.
 
@@ -496,7 +497,7 @@ class ROAMSConfig:
             kwargs = {k:v for k,v in self.correction_fn.items() if k!="name"}
             
             # E.g. fn = roams.aerial.assumptions.power
-            fn = getattr(roams.aerial.assumptions,name)
+            correction_fn = getattr(roams.aerial.assumptions,name)
 
             log.info(
                 f"The function `roams.aerial.assumptions.{name}` will be used "
@@ -506,7 +507,8 @@ class ROAMSConfig:
             )
             # E.g. self.correction_fn = lambda emissions: power(constant=4.08,power=0.77,emissions_rate=emissions)
             # (i.e. Apply prescribed power correction to emissions)
-            self.correction_fn = lambda emissions: fn(**kwargs,emissions_rate=emissions)
+            self.correction_fn = partial(correction_fn,**kwargs)
+            # self.correction_fn = lambda emissions: correction_fn(**kwargs,emissions_rate=emissions)
         
         # Look up the error-simulating noise function
         if isinstance(self.noise_fn,dict):
@@ -517,7 +519,7 @@ class ROAMSConfig:
             kwargs = {k:v for k,v in self.noise_fn.items() if k!="name"}
             
             # E.g. fn = np.random.normal
-            fn = getattr(np.random,name)
+            noise_fn = getattr(np.random,name)
 
             log.info(
                 f"The function `np.random.{name}` will be used to generate "
@@ -526,7 +528,7 @@ class ROAMSConfig:
             )
             # E.g. self.noise_fn = lambda emissions: np.random.normal(loc=1.0,scale=1.0,size=emissions.shape) * emissions
             # (i.e. take random noise the same shape as emissions, and multiply element-wise with emissions)
-            self.noise_fn = lambda emissions: fn(**kwargs,size=emissions.shape) * emissions
+            self.noise_fn = lambda emissions: noise_fn(**kwargs,size=emissions.shape) * emissions
         
         # Look up the handle-negative-emissions function
         if isinstance(self.handle_negative,str):

@@ -179,7 +179,7 @@ class ROAMSInputTests(TestCase):
             ):
             newconfig = TEST_CONFIG.copy()
             newconfig[key] = None
-            with self.assertRaises(ValueError):
+            with self.assertRaises(TypeError):
                 c = ROAMSConfig(newconfig)
     
     def test_incorrect_gas_composition(self):
@@ -240,13 +240,13 @@ class ROAMSInputTests(TestCase):
     
     def test_incorrect_noisefn(self):
         """
-        Assert that when the aerial asset types are incorrectly specified, 
-        the appropriate errors will be raised.
+        Assert that when the noise function to apply to sampled aerial plumes 
+        isn't properly specified, you get correct errors.
         """
-        # The prior specification of a string is no longer valid, yields ValueError
+        # The prior specification of a string is no longer valid, yields TypeError
         newconfig = deepcopy(TEST_CONFIG)
         newconfig["noise_fn"] = "normal"
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             c = ROAMSConfig(newconfig)
         
         # A method name that doesn't exist in numpy.random is an AttributeError
@@ -258,6 +258,29 @@ class ROAMSInputTests(TestCase):
         # When no "name" is in the dictionary, there's a KeyError
         newconfig = deepcopy(TEST_CONFIG)
         newconfig["noise_fn"] = {"loc":1.0,"scale":1.0}
+        with self.assertRaises(KeyError):
+            c = ROAMSConfig(newconfig)
+    
+    def test_incorrect_correctionfn(self):
+        """
+        Assert that when the mean correction function to apply to sampled aerial 
+        plumes isn't properly specified, you get correct errors.
+        """
+        # The prior specification of a string is no longer valid, yields TypeError
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["correction_fn"] = "power_correction"
+        with self.assertRaises(TypeError):
+            c = ROAMSConfig(newconfig)
+        
+        # A method name that doesn't exist in roams.aerial.assumptions is an AttributeError
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["correction_fn"] = {"name":"fake"}
+        with self.assertRaises(AttributeError):
+            c = ROAMSConfig(newconfig)
+        
+        # When no "name" is in the dictionary, there's a KeyError
+        newconfig = deepcopy(TEST_CONFIG)
+        newconfig["correction_fn"] = {"constant":1.0,"power":1.0}
         with self.assertRaises(KeyError):
             c = ROAMSConfig(newconfig)
     
